@@ -1,9 +1,6 @@
-# IngenieriaSoftware3 - version B
-
-Este repositorio es para comenzar a realizar los trabajos practicos dados por el Docente: Ing. Ariel Schwindt, Este es el trabajo de el alumno: Joaquin Lista
+# IngenieriaSoftware3 - version A
 
 
-Como clonar el repositorio
+##Instalacion
 
-git clone 'Link del proyecto en htttps'
-
+git clone 'link'
