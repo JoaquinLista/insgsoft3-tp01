@@ -120,7 +120,13 @@ puerto que escucha Express; el frontend nunca lo sabe (rutas relativas).
 **Registry:** GitHub Container Registry (`ghcr.io`), imágenes públicas, tag `v0.1.0`.
 Se eligió ghcr sobre Docker Hub porque la cuenta ya existe (la de GitHub del TP1),
 las imágenes quedan junto al código, y en el TP7 Actions se autentica contra ghcr
-sin secretos (con el `GITHUB_TOKEN` del workflow).
+sin secretos (con el `GITHUB_TOKEN` del workflow). Para publicar hizo falta un PAT
+**classic** con `write:packages` (los fine-grained no funcionan con ghcr) y hacer
+públicas las tres imágenes a mano (nacen privadas).
+
+**Arquitectura:** las imágenes se construyeron en una PC Intel/AMD → sirven para
+`linux/amd64`. Una máquina ARM recibiría `no matching manifest`. Se resuelve en el
+TP7 con `docker buildx` (build multi-arch).
 
 ### 3. Problemas encontrados y cómo se resolvieron
 
