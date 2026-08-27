@@ -105,16 +105,49 @@ ghcr.io/joaquinlista/panaderias-db         v0.1.0      416MB     (postgres:15-al
 
 ### 5. Imágenes publicadas en el registry
 
-*(Completar tras `docker compose push` — ver pasos en `decisiones.md` §2. Deben
-quedar las tres en `github.com/JoaquinLista?tab=packages` con visibilidad
-**pública**.)*
+Las tres imágenes en `ghcr.io/joaquinlista/*`, tag `v0.1.0`, visibilidad **pública**
+(`github.com/JoaquinLista?tab=packages`):
 
 ```
 $ docker compose push
-$ docker logout ghcr.io
-$ docker compose -f docker-compose.registry.yml pull      # baja sin credenciales
-$ docker compose -f docker-compose.registry.yml up -d     # levanta sin el código
+ ghcr.io/joaquinlista/panaderias-db:v0.1.0        Pushed
+ ghcr.io/joaquinlista/panaderias-backend:v0.1.0   Pushed
+ ghcr.io/joaquinlista/panaderias-frontend:v0.1.0  Pushed
 ```
 
-*(Agregar captura de la pestaña Packages del perfil de GitHub con las 3 imágenes
-públicas.)*
+Digests publicados:
+
+```
+ghcr.io/joaquinlista/panaderias-db:v0.1.0        sha256:d6a47b38866b20aa2173889787231dc43586d0501f9cb53c4968f39565f7e821
+ghcr.io/joaquinlista/panaderias-backend:v0.1.0   sha256:e966ade863778afa8176ad2516563a7a1437ff09a50a3f6f21f3408f984caef9
+ghcr.io/joaquinlista/panaderias-frontend:v0.1.0  sha256:5995d84e09058ed1381c134d7573ec45950dc4a1f1f713d008b23536bc89638a
+```
+
+**Checkpoint del enunciado — levantar sin credenciales y sin el código:**
+
+```
+$ docker compose down
+$ docker rmi ghcr.io/joaquinlista/panaderias-{db,backend,frontend}:v0.1.0   # borra las locales
+$ docker logout ghcr.io                                                      # sin sesión
+
+$ docker compose -f docker-compose.registry.yml pull
+ Image ghcr.io/joaquinlista/panaderias-backend:v0.1.0   Pulled
+ Image ghcr.io/joaquinlista/panaderias-frontend:v0.1.0  Pulled
+ Image ghcr.io/joaquinlista/panaderias-db:v0.1.0        Pulled
+
+$ docker compose -f docker-compose.registry.yml up -d
+$ docker compose -f docker-compose.registry.yml ps
+NAME                  IMAGE                                            STATUS
+panaderias_backend    ghcr.io/joaquinlista/panaderias-backend:v0.1.0   Up (healthy)
+panaderias_db         ghcr.io/joaquinlista/panaderias-db:v0.1.0        Up (healthy)
+panaderias_frontend   ghcr.io/joaquinlista/panaderias-frontend:v0.1.0  Up
+
+$ curl -s http://localhost/api/health
+{"status":"ok","db":"up","timestamp":"2026-08-27T18:35:33.444Z"}
+```
+
+Descargó las imágenes públicas estando deslogueado y el sistema quedó funcionando
+end-to-end. *(Agregar captura de la pestaña Packages con las 3 en "Public".)*
+
+> Nota de arquitectura: las imágenes se construyeron en una PC Intel/AMD (linux/amd64).
+> Multi-arch se resuelve en el TP7 con `docker buildx`.
