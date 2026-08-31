@@ -9,6 +9,7 @@ Cada TP agrega una capa sobre la misma aplicación.
 | TP2 | Contenedores: Dockerfiles multi-stage + Compose + registry | `v2.0.0` |
 
 Decisiones y evidencias, acumuladas TP a TP: [`decisiones.md`](decisiones.md) · [`evidencias.md`](evidencias.md).
+Definición funcional (visión, personas, épicas, historias de usuario): [`producto/`](producto/).
 
 ---
 
