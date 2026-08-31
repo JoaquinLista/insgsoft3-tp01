@@ -63,8 +63,13 @@ La llamada entra por `http://localhost/api/...` (puerto 80, nginx), nginx la
 reenvía a `http://backend:3000` por la red interna, y el backend consulta `db`.
 El navegador nunca ve el puerto 3000.
 
-*(Agregar acá captura del navegador con las 3 pestañas: Pedidos, Stock e Insumos,
-Red de Sucursales.)*
+Capturas del navegador en `http://localhost` (stack levantado con `docker compose up -d`):
+
+| Pestaña | Archivo |
+|---|---|
+| Tablero de Pedidos | ![Tablero de Pedidos](evidencias/tp2-app-pedidos.png) |
+| Stock e Insumos | ![Stock e Insumos](evidencias/tp2-app-insumos.png) |
+| Red de Sucursales | ![Red de Sucursales](evidencias/tp2-app-red.png) |
 
 ### 3. Prueba de persistencia
 
@@ -147,7 +152,9 @@ $ curl -s http://localhost/api/health
 ```
 
 Descargó las imágenes públicas estando deslogueado y el sistema quedó funcionando
-end-to-end. *(Agregar captura de la pestaña Packages con las 3 en "Public".)*
+end-to-end.
+
+![Packages públicos en GitHub](evidencias/tp2-packages.png)
 
 > Nota de arquitectura: las imágenes se construyeron en una PC Intel/AMD (linux/amd64).
 > Multi-arch se resuelve en el TP7 con `docker buildx`.
