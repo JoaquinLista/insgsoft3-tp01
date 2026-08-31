@@ -6,9 +6,102 @@ Documento acumulativo de la práctica de ISW3. Cada TP agrega su sección.
 
 ## TP1 — Git colaborativo
 
-*(Completar con lo trabajado en el TP1: protecciones de rama configuradas, flujo de
-PRs, convención de commits, etc. Si no se documentó en su momento, reconstruir acá
-brevemente a partir del historial del repo.)*
+> Reconstruido a partir del historial del repo (commits, PRs #1–#6, tag `v1.0.0`).
+> El trabajo se hizo **en solitario**, simulando el flujo de un equipo con varias ramas.
+
+### 1. Protección de la rama `main`
+
+Configurada en Settings → Branches (aplicada por la API de GitHub, es decir **declarada**,
+no a mano). Estado actual:
+
+| Regla | Valor | Por qué |
+|---|---|---|
+| Require a pull request before merging | ✅ | Nada entra a `main` sin PR; obliga a leer el diff antes de integrar. |
+| Required approving reviews | **0** | Trabajo individual: no hay quién apruebe. La revisión la hace el propio autor leyendo su diff. |
+| Dismiss stale approvals / require code owners | ❌ | No aplican sin revisores. |
+| **Include administrators** (`enforce_admins`) | ✅ | Ni el dueño del repo puede saltarse la regla. Es lo que hace que la protección sea real y no decorativa. |
+| Allow force pushes | ❌ | No se puede reescribir la historia de `main`. |
+| Allow deletions | ❌ | No se puede borrar `main`. |
+
+**Evidencia:** `evidencias/Evidencia1.png` (configuración) y `evidencias/Evidencia3.png`
+(un `git push` directo a `main` **rechazado** por el hook: `GH006: Protected branch update
+failed for refs/heads/main` → `Changes must be made through a pull request`).
+
+### 2. Flujo de trabajo
+
+Rama corta por cambio → `push` → Pull Request → merge por la web → `git pull` en local.
+**Nunca** `push` directo a `main`. Ramas usadas en el TP:
+
+| Rama | PR | Qué hizo |
+|---|---|---|
+| `feature/seccion-instalacion` | #1 | Agrega sección "Instalación" al README. |
+| `revert-1-feature/seccion-instalacion` | #2 | PR de *revert* de #1. **Se abrió y se cerró sin mergear** — se usó para practicar el mecanismo de revert de GitHub, después se descartó. |
+| `feature/seccion-instalacion-1` | #3 | Versión definitiva de la sección "Instalación". |
+| `feature/titulo-a` | #4 | Cambia el título del README a "version A". |
+| `feature/titulo-b` | #5 | Cambia el título del README a "version B" → **genera el conflicto** (ver §3). |
+| `feature/add-folder` | #6 | Agrega la carpeta `evidencias/` con el material del TP1. |
+
+Cada PR tiene descripción con *qué cambia* y *por qué*.
+
+### 3. El conflicto de merge y por qué Git no lo pudo resolver solo
+
+`feature/titulo-a` y `feature/titulo-b` cambiaron **la misma línea 1 del README** de forma
+divergente: una la dejó en `# IngenieriaSoftware3 - version A`, la otra en `- version B`.
+`feature/titulo-a` se mergeó primero (PR #4). Al querer integrar `feature/titulo-b`, Git se
+encontró con que esa línea ya no era la que la rama esperaba.
+
+**Por qué Git no puede resolverlo automáticamente:** Git hace merge a nivel de **línea**.
+Cuando dos ramas modifican la misma línea partiendo del mismo ancestro, no hay ninguna
+regla que le diga a Git cuál de las dos versiones vale — elegir sería inventar. Entonces
+marca el choque con `<<<<<<<`, `=======`, `>>>>>>>` y **deja la decisión a una persona**.
+La resolución quedó registrada en el merge commit `311ef36` (`Merge branch 'main' into
+feature/titulo-b`): se eligió "version A" y se reordenó la sección de instalación.
+
+**Qué habría hecho que el conflicto nunca apareciera:**
+- Que una sola rama fuera "dueña" de esa línea (no dos ramas tocando el título en paralelo).
+- Ramas más chicas y de vida más corta, mergeadas seguido: menos ventana para pisarse.
+- Coordinación previa ("yo toco el título, vos no") — que en un equipo es una conversación,
+  no una herramienta.
+- El conflicto **no es un error**: es Git pidiendo una decisión humana que Git no puede tomar.
+
+### 4. Versionado
+
+Tag anotado **`v1.0.0`** + release, siguiendo **versionado semántico** (`MAJOR.MINOR.PATCH`):
+`1.0.0` = primera versión estable y completa del TP1. `MAJOR` sube con cambios
+incompatibles, `MINOR` con funcionalidad nueva compatible, `PATCH` con correcciones.
+**Evidencia:** `evidencias/Evidencia4.png` (release publicada).
+
+### 5. Convención de commits
+
+Arrancó informal (`Se agrego un read.me`) y se pasó a **Conventional Commits**
+(`docs:`, `chore:`, `feat:`) a partir de `dcf25f7`. De TP2 en adelante todos los commits
+siguen esa convención. El historial temprano se dejó como está — refleja el aprendizaje.
+
+### 6. Problemas encontrados y cómo se resolvieron
+
+| Problema | Causa | Solución |
+|---|---|---|
+| `git push` a `main` rechazado (`GH006`) | La protección de rama exige PR. | Se creó una rama, se pusheó esa, y se integró por PR. Es el comportamiento buscado. |
+| El merge hecho en la web no aparecía en local | El merge ocurrió en el servidor de GitHub, no en la copia local. | `git pull` para traer el commit de merge y sincronizar `main`. |
+| Conflicto en el título del README | Dos ramas cambiaron la misma línea (§3). | Resuelto en la web eligiendo "version A"; merge commit `311ef36`. |
+| PR de revert (#2) abierto por error / prueba | Se estaba practicando el mecanismo de revert. | Se cerró sin mergear; la sección de instalación se rehízo limpia en el PR #3. |
+
+### 7. Uso de IA
+
+- **Qué se hizo con IA:** la redacción de esta sección de `decisiones.md` y de la sección
+  TP1 de `evidencias.md` se reconstruyó con **Claude (Claude Code)** a partir del historial
+  del repositorio (commits, PRs, configuración de protección de rama vía API de GitHub),
+  porque el TP1 no se documentó en el momento.
+- **Qué NO se hizo con IA:** la configuración de la protección de rama, la creación de las
+  ramas y PRs, la resolución del conflicto y la publicación del tag/release — todo eso lo
+  hizo el alumno cuando cursó el TP1.
+- **Cómo se verificó:** cada afirmación de esta sección se contrastó contra el historial
+  real (`git log`, `git show 311ef36`, `gh pr view`, `gh api .../branches/main/protection`).
+  El alumno tiene que poder explicar en la defensa cada punto de §1 a §4 sin leerlos.
+
+> **Pendiente del alumno:** confirmar el relato del PR #2 (revert) y, si hace falta,
+> recuperar las dos capturas que pide el enunciado y aún no están (aviso de conflicto en
+> el PR y marcadores `<<<<<<<`) — ver `evidencias.md` §TP1.
 
 ---
 
