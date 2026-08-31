@@ -158,7 +158,8 @@ TP7 con `docker buildx` (build multi-arch).
   - Prueba de persistencia (`down` / `up` / `down -v`).
   - Revisión línea por línea de los Dockerfiles y del compose contra la guía del TP2.
 - **Pendiente del alumno antes de la defensa** (la regla es "si no lo podés explicar,
-  no se aprueba"):
+  no se aprueba"). Material de estudio: [`evidencias/guia-defensa-tp2.md`](evidencias/guia-defensa-tp2.md)
+  responde una por una las preguntas de abajo con referencia al archivo del repo.
   - [ ] Poder explicar cada línea de los dos Dockerfiles y del compose.
   - [ ] Rehacer a mano el checklist de `elegir-app.md` (los 5 pasos, 20 min).
   - [ ] Agregar las reglas de negocio del criterio 4 (o dejar por escrito cuáles y en
