@@ -7,6 +7,75 @@ Documento acumulativo. Cada TP agrega su sección con salidas de comandos y capt
 
 ---
 
+## TP1 — Git colaborativo
+
+El enunciado pide **cuatro capturas**: (1) push directo rechazado, (2) aviso de conflicto
+en el PR, (3) marcadores del conflicto, (4) release publicada.
+
+### 1. Push directo a `main` rechazado
+
+![Push directo rechazado](evidencias/Evidencia3.png)
+
+```
+! [remote rejected] main -> main (protected branch hook declined)
+remote: error: GH006: Protected branch update failed for refs/heads/main.
+remote: Changes must be made through a pull request.
+```
+
+La protección de rama (con *Include administrators* activado) impide el push directo. El
+cambio tuvo que entrar por una rama + Pull Request.
+
+### 2. Configuración de la protección de rama
+
+![Branch protection](evidencias/Evidencia1.png)
+
+*Require a pull request before merging* activado, sobre el patrón `main`.
+
+### 3. Aviso de conflicto en el Pull Request
+
+> ⚠️ **Pendiente.** El conflicto (PR #5, `feature/titulo-b`) se resolvió en su momento
+> desde el editor de conflictos de la web de GitHub, pero no se capturó la pantalla del
+> aviso *"This branch has conflicts that must be resolved"*. Para recuperarlo: hacer un
+> conflicto chico en una rama descartable (cambiar la misma línea que `main`), abrir el PR,
+> capturar el aviso y el editor con los marcadores `<<<<<<<`, y después borrar la rama.
+>
+> Evidencia disponible mientras tanto — el merge commit que resolvió el conflicto real:
+>
+> ```
+> $ git show 311ef36
+> commit 311ef369703f203ad78121c024187619951d36b8
+> Merge: f6ca4eb 1608421
+>     Merge branch 'main' into feature/titulo-b
+>
+> diff --cc README.md
+> @@@ -1,9 -1,9 +1,6 @@@
+> - # IngenieriaSoftware3 - version B      (lo que traía feature/titulo-b)
+> + # IngenieriaSoftware3 - version A      (lo que ya estaba en main, vía PR #4)
+> ```
+>
+> Git marcó el choque en la línea 1 (dos ramas cambiaron el título); la resolución
+> eligió "version A".
+
+### 4. Marcadores del conflicto (`<<<<<<<`)
+
+> ⚠️ **Pendiente** — misma captura que el punto 3 (el editor de conflictos de GitHub
+> muestra los marcadores `<<<<<<< HEAD` / `=======` / `>>>>>>>` sobre la línea del título).
+
+### 5. Release publicada
+
+![Release v1.0.0](evidencias/Evidencia4.png)
+
+Tag anotado `v1.0.0` + release, en la página del repositorio. Versionado semántico
+(ver `decisiones.md` §TP1.4).
+
+### 6. Pull Request mergeado (apoyo)
+
+![PR mergeado](evidencias/Evidencia2.png)
+
+PR #5 (`feature/titulo-b`) mergeado a `main` — incluye el commit de resolución del conflicto.
+
+---
+
 ## TP2 — Contenedores
 
 ### 1. `docker compose up -d --build` desde cero
