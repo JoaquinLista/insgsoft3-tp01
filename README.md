@@ -1,5 +1,4 @@
 # Ingeniería del Software 3 — App del semestre
-
 Repositorio único de la práctica de ISW3 (UCC 2026) — alumno: **Joaquín Lista**.
 Cada TP agrega una capa sobre la misma aplicación.
 
