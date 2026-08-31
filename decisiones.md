@@ -264,3 +264,98 @@ TP7 con `docker buildx` (build multi-arch).
   - [ ] Repasar las preguntas de ejemplo de la defensa (imagen vs contenedor, `CMD`
         vs `ENTRYPOINT`, `down` vs `down -v`, por qué multi-stage, por qué el
         healthcheck).
+
+---
+
+## TP3 — Planificación DevOps
+
+**Tablero:** https://github.com/users/JoaquinLista/projects/1 (público)
+
+### 0. Qué se montó
+
+Sobre el mismo repo del TP1/TP2, en **GitHub Projects (v2)**:
+
+| Item | # | Label | Estado | Sprint |
+|---|---|---|---|---|
+| Épica — *Pipeline DevOps completo para mi app* | #15 | `epic` | abierta | — |
+| Historia — *CI: build y tests automáticos en cada PR* | #16 | `story` | abierta | Sprint 1 |
+| Tarea — *Escribir el workflow de build y tests* | #17 | `task` | **cerrada** (PR #20) | Sprint 1 |
+| Tarea — *Publicar el reporte de tests como artefacto* | #18 | `task` | abierta | Sprint 1 |
+| Bug — *El front carga sin la lista cuando el back no responde* | #19 | `bug` | abierto | — |
+
+Jerarquía navegable con **sub-issues**: #15 → #16 → (#17, #18). El bug #19 va **al
+costado**: es un defecto de algo ya construido (TP2), no era parte del plan, así que no
+cuelga del árbol. La épica no lleva criterios de aceptación (no se verifica sola; se cierra
+cuando cierran sus historias); los cuatro criterios están en la historia #16.
+
+**Trazabilidad (la vuelta completa):** desde la tarea cerrada #17 se navega al PR #20
+(`Closes #17` en la descripción → cerró el issue al mergear a `main`, con las protecciones
+del TP1 activas) → al commit del `ci.yml` → y hacia arriba a la historia #16 y la épica #15.
+Solo #17 se cerró: un PR implementa **una tarea concreta**. La historia y la otra tarea
+quedan abiertas porque el trabajo sigue en el TP4.
+
+### 1. Duración del sprint: 2 semanas
+
+Se eligió **2 semanas** porque:
+- Es el largo estándar en la industria (el rango habitual es 1–4) y el punto de equilibrio
+  entre tener un objetivo comprometido estable y no demorar el feedback.
+- **Se alinea con el ritmo de entregas de la materia** (aproximadamente un TP cada dos
+  semanas): cada iteración cierra junto a una entrega, que es la recomendación explícita
+  del enunciado.
+- Con una sola persona, un ciclo más corto (1 semana) gasta demasiada proporción del
+  tiempo en la ceremonia de planificar/cerrar; uno más largo (3–4) diluye el objetivo.
+
+### 2. Límite de trabajo en progreso (WIP): 2
+
+Configurado en la columna *In Progress* del board. Se eligió **2** siguiendo la regla de
+arranque **cantidad de personas + 1**: trabajando solo, `1 + 1 = 2`.
+
+- El `+1` es la válvula para cuando una tarjeta queda **esperando algo** (una revisión, una
+  respuesta, que termine un pipeline) y hace falta avanzar en otra cosa sin dejar la
+  primera de lado.
+- La idea de fondo es **empezar menos y terminar más**: el trabajo empezado y no terminado
+  no es productividad, es inventario (más cambio de contexto, más ramas viejas, más
+  conflictos al integrar).
+- GitHub no lo impide: cuando la columna se llena pone el contador en **rojo**. Es un
+  acuerdo de trabajo, no un candado.
+- **Señal para ajustarlo:** si nunca se alcanza, está demasiado alto y no está limitando
+  nada. Si trabajara en equipo, el número subiría a `personas + 1`.
+
+### 3. Diagnóstico de la historia mal escrita
+
+> *"Como desarrollador quiero crear la tabla usuarios para guardar los datos."*
+
+**Por qué está mal:** es una **tarea disfrazada de historia**. "Crear una tabla" es trabajo
+técnico interno, no una capacidad que alguien *quiera* — nadie se beneficia de una tabla en
+sí. Falla INVEST en **Valiosa** (no entrega valor observable), el "rol" está forzado
+(*desarrollador* no es el usuario del sistema) y el "para" no es un beneficio real. Y no es
+**Testeable** como valor: ¿cómo demostrás que "guardar los datos" está hecho para un
+usuario?
+
+**Cómo la reescribiría:** subir un nivel, a la capacidad del usuario final —
+*"Como visitante quiero registrarme con email y contraseña para tener una cuenta y
+guardar mis pedidos"* — con criterios de aceptación verificables (se puede crear una
+cuenta, no se permite email repetido, la sesión persiste). "Crear la tabla usuarios"
+pasa a ser **una tarea** debajo de esa historia.
+
+### 4. Problemas encontrados y cómo se resolvieron
+
+| Problema | Causa | Solución |
+|---|---|---|
+| `gh` no podía configurar el Project | El token de la cuenta no tiene el scope `project` (solo `repo`, `workflow`, `gist`, `read:org`). | Los issues y el PR se crearon por CLI (`gh issue create`, `gh pr create`); la configuración del Project (visibilidad, board, campo Iteration, límite de WIP, jerarquía) se hizo a mano en la web. |
+| La historia #16 quedó con una sola sub-issue (1/1) | En el primer intento se vinculó #17 pero no #18. La barra de progreso mentía. | Se agregó #18 como sub-issue → la historia pasó a 1/2, que es lo correcto (una tarea hecha, una pendiente). |
+| Los Projects de usuario nacen privados | Comportamiento por defecto de GitHub; el entregable exige URL pública. | Settings → Visibility → *Public*, verificado abriendo la URL en una ventana de incógnito. |
+
+### 5. Uso de IA
+
+- **Qué se hizo con IA:** con **Claude (Claude Code)** se crearon los cinco issues
+  (títulos y cuerpos tomados textualmente del enunciado y el video), el esqueleto de
+  `.github/workflows/ci.yml` y su PR (#20, `Closes #17`), y la redacción de esta sección.
+- **Qué hizo el alumno a mano:** toda la configuración del Project — crearlo, hacerlo
+  público, armar la jerarquía de sub-issues, el board, el campo Sprint (2 semanas), la
+  asignación al Sprint 1, el límite de WIP y el merge del PR #20.
+- **Qué decidió el alumno (y tiene que poder defender):** la duración del sprint, el
+  número del límite de WIP y el diagnóstico de §3.
+- **Cómo se verificó:** la jerarquía y los estados se contrastaron contra la API de GitHub
+  (`gh api .../issues/NN/sub_issues`, `gh issue view`); la trazabilidad #17 → PR #20 se
+  confirmó (issue cerrado con `stateReason: COMPLETED`, `closedBy: [20]`).
