@@ -14,6 +14,61 @@ el TP donde su parte técnica aterriza.
 
 ---
 
+## Mapa de casos de uso
+
+Vista única de qué hace cada rol. Los óvalos son casos de uso; las líneas punteadas
+`«include»` marcan funcionalidad obligatoria que un caso de uso reutiliza de otro.
+
+```mermaid
+flowchart LR
+    L(("Lucía<br/>Punto de venta"))
+    R(("Rodrigo<br/>Depósito / Fábrica"))
+    S(("Sofía<br/>Producción"))
+    M(("Martín<br/>Admin"))
+
+    UC1(["Crear pedido"])
+    UC2(["Consultar pedidos y su estado"])
+    UC3(["Avanzar estado del pedido"])
+    UC4(["Cancelar pedido"])
+    UC5(["Despachar pedido"])
+    UC6(["Cargar / actualizar insumo"])
+    UC7(["Ver alerta de bajo stock"])
+    UC8(["Definir receta de un producto"])
+    UC9(["ABM de sucursales y productos"])
+    UC10(["Ver tablero operativo"])
+
+    L --- UC1
+    L --- UC2
+    R --- UC2
+    R --- UC3
+    R --- UC4
+    R --- UC5
+    R --- UC10
+    S --- UC6
+    S --- UC7
+    S --- UC8
+    M --- UC8
+    M --- UC9
+
+    UC5 -. include .-> UC3
+    UC5 -. include .-> UC7
+```
+
+| Caso de uso | Épica | Historia |
+|---|---|---|
+| Crear pedido | E1 | HU-01 |
+| Consultar pedidos y su estado | E1 / E6 | HU-02, HU-03, HU-15 |
+| Avanzar estado del pedido | E2 | HU-08, HU-10 |
+| Cancelar pedido | E2 | HU-09 |
+| Despachar pedido (descuenta insumos) | E4 | HU-11, HU-12 |
+| Cargar / actualizar insumo | E3 | HU-04, HU-06 |
+| Ver alerta de bajo stock | E3 | HU-05 |
+| Definir receta de un producto | E4 | HU-07 |
+| ABM de sucursales y productos | E5 | HU-13, HU-14 |
+| Ver tablero operativo | E6 | HU-16 |
+
+---
+
 ## E1 — Gestión de pedidos entre sucursales
 
 **Objetivo:** que cualquier encargado pueda registrar un pedido de productos de una

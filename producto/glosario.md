@@ -22,6 +22,54 @@ la API y en las tablas de la base.
 | **Upsert de insumo** | Alta o actualización de un insumo identificándolo por `nombre` (no por id). | `insumosService.guardarInsumo` |
 | **Mapa operacional / Red de sucursales** | Vista de solo lectura que agrupa las sucursales por tipo. | pestaña "Red de Sucursales" |
 
+## Modelo de dominio
+
+Cómo se relacionan los términos de arriba. Es un modelo **conceptual** (del problema), no
+el esquema de la base: los atributos son los que importan para el negocio.
+
+```mermaid
+classDiagram
+    class Sucursal {
+        nombre
+        tipo : FABRICA | VENTA | DEPOSITO
+    }
+    class Producto {
+        nombre
+        unidad_medida
+    }
+    class Insumo {
+        nombre
+        stock_actual
+        stock_minimo
+        unidad_medida
+    }
+    class Pedido {
+        estado
+        fecha_creacion
+    }
+    class DetallePedido {
+        cantidad
+    }
+    class Receta {
+        cantidad_por_unidad
+    }
+
+    Pedido "1" --> "1" Sucursal : origen
+    Pedido "1" --> "1" Sucursal : destino
+    Pedido "1" *-- "1..*" DetallePedido
+    DetallePedido "*" --> "1" Producto
+    Producto "1" -- "0..*" Receta
+    Receta "*" --> "1" Insumo
+
+    note for Receta "No existe todavía en el código; la agrega la épica E4 (HU-07)"
+```
+
+Lecturas clave:
+- Un **pedido** tiene origen y destino distintos (dos vínculos a `Sucursal`) y al menos un
+  **detalle**; si se borra el pedido, se borran sus detalles (composición).
+- La **receta** es lo que une el mundo de los productos con el de los insumos: sin receta,
+  despachar un producto no consume nada.
+
 ## Convenciones
 
 - En **código y API**: `EN_PREPARACION` (mayúsculas, guion bajo, sin tilde).

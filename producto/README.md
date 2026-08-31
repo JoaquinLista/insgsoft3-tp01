@@ -16,6 +16,17 @@ Esta carpeta describe *qué* hace el sistema y *para quién*; el *cómo* técnic
 | [`requerimientos-no-funcionales.md`](requerimientos-no-funcionales.md) | Los RNF (rendimiento, fiabilidad, portabilidad, seguridad…), cuantificados y cruzados con `decisiones.md`. |
 | [`trazabilidad.md`](trazabilidad.md) | Matriz que conecta épica → historia → endpoint/archivo → test del TP5, y las dependencias entre historias. |
 
+## Diagramas
+
+Están embebidos (Mermaid) en el documento al que pertenecen, se renderizan solos en GitHub:
+
+| Diagrama | Dónde |
+|---|---|
+| Casos de uso (4 actores × funcionalidades) | [`epicas.md`](epicas.md) |
+| Modelo de dominio (clases conceptual) | [`glosario.md`](glosario.md) |
+| Máquina de estados del pedido | [`historias/HU-08-avanzar-estado-pedido.md`](historias/HU-08-avanzar-estado-pedido.md) |
+| Flujo de "despachar un pedido" | [`historias/HU-11-descuento-insumos-al-despachar.md`](historias/HU-11-descuento-insumos-al-despachar.md) |
+
 ## Cómo se usa
 
 1. Cada historia nace en `historias/` a partir de [`historias/_plantilla.md`](historias/_plantilla.md).
@@ -30,5 +41,5 @@ Esta carpeta describe *qué* hace el sistema y *para quién*; el *cómo* técnic
 
 Primera pasada (clase ~4, P1). Están la visión, las personas, el glosario, las 6 épicas,
 3 historias completas de referencia (una por cada épica funcional que todavía no está
-resuelta en el código), los requerimientos no funcionales y la matriz de trazabilidad.
-El resto del backlog se completa historia por historia.
+resuelta en el código), los requerimientos no funcionales, la matriz de trazabilidad y
+cuatro diagramas. El resto del backlog se completa historia por historia.

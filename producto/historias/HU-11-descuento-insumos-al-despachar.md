@@ -30,6 +30,24 @@
 - El descuento **puede dejar un insumo por debajo del mínimo** (eso es válido y dispara
   la alerta de bajo stock de HU-05); lo que no puede es dejarlo **negativo**.
 
+### Flujo de "despachar un pedido"
+
+```mermaid
+flowchart TD
+    A[Rodrigo pide despachar el pedido] --> B{El pedido esta<br/>en EN_PREPARACION?}
+    B -- No --> X[/Rechazar: transicion invalida - 409 - HU-10/]
+    B -- Si --> C[Calcular consumo por insumo<br/>suma de cantidad x receta de cada item]
+    C --> D{Algun insumo<br/>no alcanza?}
+    D -- Si --> Y[/Rechazar: stock insuficiente<br/>no se descuenta nada - HU-12/]
+    D -- No --> E[BEGIN transaccion]
+    E --> F[Descontar stock de cada insumo]
+    F --> G[Cambiar estado a DESPACHADO]
+    G --> H{Todo OK?}
+    H -- No --> I[ROLLBACK<br/>estado y stock sin cambios]
+    H -- Si --> J[COMMIT]
+    J --> K[Pedido DESPACHADO<br/>insumos actualizados]
+```
+
 ## Criterios de aceptación
 
 ```gherkin

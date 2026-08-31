@@ -29,6 +29,23 @@
   | `ENTREGADO` | — (final) |
   | `CANCELADO` | — (final) |
 
+  ```mermaid
+  stateDiagram-v2
+      [*] --> PENDIENTE
+      PENDIENTE --> EN_PREPARACION
+      PENDIENTE --> CANCELADO
+      EN_PREPARACION --> DESPACHADO: descuenta insumos (HU-11)
+      EN_PREPARACION --> CANCELADO
+      DESPACHADO --> ENTREGADO
+      ENTREGADO --> [*]
+      CANCELADO --> [*]
+  ```
+
+  Cualquier transición que no sea una flecha de este diagrama se rechaza (HU-10): saltos
+  (`PENDIENTE → DESPACHADO`), retrocesos (`DESPACHADO → EN_PREPARACION`), salir de un
+  estado final (`ENTREGADO`, `CANCELADO`) y estados inexistentes. Cada flecha es un caso
+  de test que pasa; cada no-flecha, un caso de test que rechaza.
+
 - La cancelación se trata en **HU-09**; el rechazo de transiciones inválidas, en **HU-10**.
 - El **descuento de stock** al entrar en `DESPACHADO` lo agrega **HU-11**; esta historia
   asume que hay stock y solo cambia el estado.
