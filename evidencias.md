@@ -33,33 +33,35 @@ cambio tuvo que entrar por una rama + Pull Request.
 
 ### 3. Aviso de conflicto en el Pull Request
 
-> ⚠️ **Pendiente.** El conflicto (PR #5, `feature/titulo-b`) se resolvió en su momento
-> desde el editor de conflictos de la web de GitHub, pero no se capturó la pantalla del
-> aviso *"This branch has conflicts that must be resolved"*. Para recuperarlo: hacer un
-> conflicto chico en una rama descartable (cambiar la misma línea que `main`), abrir el PR,
-> capturar el aviso y el editor con los marcadores `<<<<<<<`, y después borrar la rama.
->
-> Evidencia disponible mientras tanto — el merge commit que resolvió el conflicto real:
+![Aviso de conflicto en el PR](evidencias/conflicto-aviso.png)
+
+GitHub muestra *"This branch has conflicts that must be resolved"* con `README.md` listado y
+el botón **Resolve conflicts**.
+
+> **Nota honesta:** el conflicto original del TP1 (`feature/titulo-a` vs `feature/titulo-b`,
+> PR #5, ago-2026) se resolvió en su momento pero **no se capturó la pantalla**. Para tener
+> la evidencia que pide el enunciado se **recreó** un conflicto idéntico: dos ramas
+> (`demo-conflicto-a` / `demo-conflicto-b`) cambian la misma línea 1 del README; al mergear
+> una, la otra entra en conflicto. El conflicto original sigue registrado en el historial en
+> el merge commit `311ef36`:
 >
 > ```
 > $ git show 311ef36
-> commit 311ef369703f203ad78121c024187619951d36b8
-> Merge: f6ca4eb 1608421
->     Merge branch 'main' into feature/titulo-b
->
-> diff --cc README.md
-> @@@ -1,9 -1,9 +1,6 @@@
-> - # IngenieriaSoftware3 - version B      (lo que traía feature/titulo-b)
-> + # IngenieriaSoftware3 - version A      (lo que ya estaba en main, vía PR #4)
+>   Merge branch 'main' into feature/titulo-b
+>   diff --cc README.md
+>   @@@ -1,9 -1,9 +1,6 @@@
+>   - # IngenieriaSoftware3 - version B      (traía feature/titulo-b)
+>   + # IngenieriaSoftware3 - version A      (ya estaba en main, vía PR #4)
 > ```
->
-> Git marcó el choque en la línea 1 (dos ramas cambiaron el título); la resolución
-> eligió "version A".
 
 ### 4. Marcadores del conflicto (`<<<<<<<`)
 
-> ⚠️ **Pendiente** — misma captura que el punto 3 (el editor de conflictos de GitHub
-> muestra los marcadores `<<<<<<< HEAD` / `=======` / `>>>>>>>` sobre la línea del título).
+![Marcadores del conflicto en el editor de GitHub](evidencias/conflicto-marcadores.png)
+
+El editor de conflictos de GitHub muestra el choque con `<<<<<<< demo-conflicto-b` /
+`=======` / `>>>>>>> main` sobre la línea del título. Git no puede elegir entre las dos
+versiones porque ambas ramas modificaron **la misma línea** partiendo del mismo ancestro
+(ver `decisiones.md` §TP1.3). La resolución deja una sola línea con el título correcto.
 
 ### 5. Release publicada
 

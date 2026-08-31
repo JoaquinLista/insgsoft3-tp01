@@ -99,9 +99,13 @@ siguen esa convención. El historial temprano se dejó como está — refleja el
   real (`git log`, `git show 311ef36`, `gh pr view`, `gh api .../branches/main/protection`).
   El alumno tiene que poder explicar en la defensa cada punto de §1 a §4 sin leerlos.
 
-> **Pendiente del alumno:** confirmar el relato del PR #2 (revert) y, si hace falta,
-> recuperar las dos capturas que pide el enunciado y aún no están (aviso de conflicto en
-> el PR y marcadores `<<<<<<<`) — ver `evidencias.md` §TP1.
+Las cuatro capturas que pide el enunciado están en `evidencias.md` §TP1. Las dos del
+conflicto (aviso en el PR + marcadores) se obtuvieron **recreando** un conflicto idéntico
+(`demo-conflicto-a` / `demo-conflicto-b`), porque el conflicto original (PR #5) no se había
+capturado; el original queda registrado en el merge commit `311ef36`.
+
+> **Pendiente del alumno:** confirmar el relato del PR #2 (revert) — se describió como
+> "prueba del mecanismo de revert de GitHub, después descartada"; ajustar si fue otra cosa.
 
 ---
 
