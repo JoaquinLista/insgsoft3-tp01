@@ -281,7 +281,7 @@ Sobre el mismo repo del TP1/TP2, en **GitHub Projects (v2)**:
 | Historia — *CI: build y tests automáticos en cada PR* | #16 | `story` | abierta | Sprint 1 |
 | Tarea — *Escribir el workflow de build y tests* | #17 | `task` | **cerrada** (PR #20) | Sprint 1 |
 | Tarea — *Publicar el reporte de tests como artefacto* | #18 | `task` | abierta | Sprint 1 |
-| Bug — *El front carga sin la lista cuando el back no responde* | #19 | `bug` | abierto | — |
+| Bug — *El front carga sin la lista cuando el back todavía no responde* | #19 | `bug` | abierto | — |
 
 Jerarquía navegable con **sub-issues**: #15 → #16 → (#17, #18). El bug #19 va **al
 costado**: es un defecto de algo ya construido (TP2), no era parte del plan, así que no
@@ -342,7 +342,7 @@ pasa a ser **una tarea** debajo de esa historia.
 
 | Problema | Causa | Solución |
 |---|---|---|
-| `gh` no podía configurar el Project | El token de la cuenta no tiene el scope `project` (solo `repo`, `workflow`, `gist`, `read:org`). | Los issues y el PR se crearon por CLI (`gh issue create`, `gh pr create`); la configuración del Project (visibilidad, board, campo Iteration, límite de WIP, jerarquía) se hizo a mano en la web. |
+| Elegir dónde configurar el Project (web vs. `gh`) | El token empezó sin el scope `project`, y además el enunciado recomienda la web para todo lo visual ("para uno, la web; para varios, el comando"). | Los issues y el PR se crearon por CLI (`gh issue create`, `gh pr create`); la configuración del Project (visibilidad, board, campo Iteration, límite de WIP, jerarquía de sub-issues) se hizo a mano en la web. Después se agregó el scope con `gh auth refresh -s project` para poder **inspeccionar** el tablero desde la terminal (`gh project item-list`, la API GraphQL) al verificar la entrega. |
 | La historia #16 quedó con una sola sub-issue (1/1) | En el primer intento se vinculó #17 pero no #18. La barra de progreso mentía. | Se agregó #18 como sub-issue → la historia pasó a 1/2, que es lo correcto (una tarea hecha, una pendiente). |
 | Los Projects de usuario nacen privados | Comportamiento por defecto de GitHub; el entregable exige URL pública. | Settings → Visibility → *Public*, verificado abriendo la URL en una ventana de incógnito. |
 
@@ -353,9 +353,12 @@ pasa a ser **una tarea** debajo de esa historia.
   `.github/workflows/ci.yml` y su PR (#20, `Closes #17`), y la redacción de esta sección.
 - **Qué hizo el alumno a mano:** toda la configuración del Project — crearlo, hacerlo
   público, armar la jerarquía de sub-issues, el board, el campo Sprint (2 semanas), la
-  asignación al Sprint 1, el límite de WIP y el merge del PR #20.
+  asignación de la historia y sus tareas al Sprint 1, el límite de WIP y el merge del PR #20.
 - **Qué decidió el alumno (y tiene que poder defender):** la duración del sprint, el
   número del límite de WIP y el diagnóstico de §3.
 - **Cómo se verificó:** la jerarquía y los estados se contrastaron contra la API de GitHub
-  (`gh api .../issues/NN/sub_issues`, `gh issue view`); la trazabilidad #17 → PR #20 se
-  confirmó (issue cerrado con `stateReason: COMPLETED`, `closedBy: [20]`).
+  (`gh api .../issues/NN/sub_issues`, `gh issue view`, `gh project item-list`); la
+  trazabilidad #17 → PR #20 se confirmó (issue cerrado con `stateReason: COMPLETED`,
+  `closedBy: [20]`). En esa pasada de verificación (asistida por Claude) se asignó la tarea
+  #18 al Sprint 1, que había quedado sin sprint, y se cerraron dos épicas duplicadas (#23 y
+  #24) creadas mientras se practicaban los comandos `gh issue create`.
