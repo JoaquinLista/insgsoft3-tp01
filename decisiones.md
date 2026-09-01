@@ -362,3 +362,130 @@ pasa a ser **una tarea** debajo de esa historia.
   `closedBy: [20]`). En esa pasada de verificación (asistida por Claude) se asignó la tarea
   #18 al Sprint 1, que había quedado sin sprint, y se cerraron dos épicas duplicadas (#23 y
   #24) creadas mientras se practicaban los comandos `gh issue create`.
+
+## TP4 — CI: Pipelines as Code
+
+**Workflow:** [`.github/workflows/ci.yml`](.github/workflows/ci.yml) ·
+**Corridas:** pestaña *Actions* del repo · **Badge:** al principio del `README.md`
+
+### 0. Qué se montó
+
+Un pipeline de **integración continua** en GitHub Actions que, en **cada Pull Request a
+`main` y cada push a `main`**, construye las dos imágenes de la app (backend y frontend) con
+los Dockerfiles del TP2. El pipeline es **requisito de merge**: sin sus dos checks en verde,
+`main` no acepta el PR (se suma a la protección de rama del TP1).
+
+| Pieza | Cómo quedó |
+|---|---|
+| Disparadores | `pull_request` y `push`, ambos filtrados a `branches: [main]` |
+| Jobs | `build-backend` y `build-frontend`, en paralelo (runners separados) |
+| Build | `docker/build-push-action@v7` con `push: false` — construye, no publica |
+| Cache | capas de la imagen en el cache de GitHub Actions (`type=gha`), un `scope` por job |
+| Gate | `required_status_checks` sobre `main`: `build-backend` + `build-frontend`, `strict: true` |
+| Visibilidad | status badge del workflow en el README |
+
+### 1. Estructura del pipeline: por qué esos jobs y por qué en paralelo
+
+- **Dos jobs, uno por imagen.** La app tiene dos Dockerfiles independientes
+  (`backend/Dockerfile` y `frontend/Dockerfile`); construir cada uno en su propio job
+  refleja esa separación real. No es "dos por llegar a dos": si la app tuviera un solo
+  Dockerfile sería un solo job y no se perdería nada.
+- **En paralelo** porque los jobs de GitHub Actions corren en runners distintos y **no
+  comparten filesystem ni dependen uno del otro**: el build del frontend no necesita nada
+  del backend. Ponerlos en serie (`needs:`) solo sumaría espera sin ningún beneficio. El
+  feedback del PR llega en el tiempo del job más lento, no en la suma de los dos.
+- El primer step de cada job (`echo "Rama … · commit …"`) es solo diagnóstico: deja escrito
+  en el log **qué** se está verificando. Se arma la variable `RAMA` con `github.head_ref`
+  porque en un PR `GITHUB_REF_NAME` vale `<n>/merge` (GitHub verifica la *mezcla* de la rama
+  con `main`), no el nombre de la rama.
+
+### 2. Qué cachea el pipeline y qué pasa si el cache desaparece
+
+- **Qué se cachea:** las **capas de la imagen Docker**. El `docker build` produce una capa
+  por cada instrucción que toca el filesystem (`FROM`, `COPY`, `RUN`). Con
+  `cache-to: type=gha,mode=max` esas capas se suben al cache de GitHub Actions al terminar,
+  y `cache-from: type=gha` las baja al empezar la corrida siguiente.
+- **Cuáles se reutilizan:** las que no dependen de nada que haya cambiado. Los Dockerfiles
+  del TP2 copian **primero** `package.json` + `package-lock.json` y corren `npm ci`, y
+  **después** copian el código. Por eso, si un commit solo toca código, la capa cara
+  (`npm ci`, que instala todas las dependencias) se toma del cache y no se rehace; solo se
+  rehacen las capas desde el `COPY` del código en adelante. Si el commit cambia un
+  `package.json`, esa capa y todas las siguientes se reconstruyen.
+- **`mode=max`** guarda también las capas intermedias de las etapas de build (no solo las de
+  la imagen final), que es lo que permite reutilizar el `npm ci` de una etapa `deps` /
+  `build` multi-stage. Con el `min` por defecto se reutilizaría mucho menos.
+- **Un `scope` distinto por job** (`scope=backend` / `scope=frontend`): sin eso los dos jobs
+  escriben en el mismo estante del cache y **se pisan** — el último en terminar deja su cache
+  y borra el del otro, y en cada corrida cambia cuál de los dos muestra `CACHED`. No da
+  error: da un comportamiento errático que parece un Dockerfile roto y no lo es.
+- **Si el cache desaparece** (GitHub lo desaloja cuando quiere; tiene límite de tamaño): el
+  pipeline funciona **exactamente igual, solo más lento** — vuelve a construir todas las
+  capas desde cero. El cache es una optimización, nunca una dependencia. Si el build
+  *fallara* sin cache, no habría un cache: habría una dependencia escondida, y eso sería un
+  bug del pipeline.
+- Nota honesta: con una app de este tamaño la segunda corrida **no necesariamente tarda
+  menos** (subir el cache también cuesta, y cada corrida cae en una máquina distinta). La
+  evidencia de que el cache funciona es la palabra **`CACHED`** en el log del build, no el
+  cronómetro. En la segunda corrida del PR del pipeline los dos jobs mostraron `CACHED` en
+  todas las capas que no habían cambiado.
+
+### 3. Por qué el pipeline construye con el Dockerfile y no compila por su cuenta
+
+Si el workflow compilara la app por su lado (con `npm ci && npm run build` en el runner),
+habría **dos definiciones de build**: la del workflow y la del Dockerfile. Tarde o temprano
+divergen —una versión de Node distinta, una variable de entorno que está en un lado y no en
+el otro— y entonces el pipeline estaría verificando una compilación **distinta** de la que
+después se despliega. Construir con el Dockerfile del TP2 garantiza que **lo que se verifica
+es exactamente lo que se despliega**. Ventaja lateral: el workflow no tiene una sola línea
+de Node ni de ninguna tecnología concreta — el mismo `ci.yml` le sirve a cualquier stack,
+porque "cómo se construye la app" vive en el Dockerfile, no en el pipeline.
+
+### 4. El pipeline como gate y la demostración
+
+- **Configuración del gate** (Settings → Branches → regla de `main`): *Require status checks
+  to pass before merging* con `build-backend` y `build-frontend`, más *Require branches to be
+  up to date before merging* (`strict: true`). Los approvals siguen en **0** (como en el
+  TP1: GitHub no deja aprobar el PR propio; lo que bloquea el merge es el pipeline en verde,
+  no una firma humana).
+- **`strict: true`** significa que, además de los checks en verde, la rama del PR tiene que
+  estar **actualizada con `main`**: si entre medio se mergeó otro PR, hay que apretar
+  *Update branch* y volver a correr el pipeline sobre la mezcla nueva antes de poder
+  mergear. Evita mergear algo que dio verde contra un `main` que ya no existe.
+- **Demostración del gate actuando** (PR de la rama `demo/rompe-el-build`): se rompió a
+  propósito la construcción de una de las imágenes (un `import` a un archivo inexistente en
+  el frontend, que el bundler de Vite resuelve *durante* el build y falla), se abrió el PR y
+  el check quedó en **rojo con el merge bloqueado**; un segundo commit sacó el error, el
+  pipeline volvió a correr solo, pasó a **verde** y recién ahí se pudo mergear. El PR quedó
+  en el historial con sus corridas roja y verde — esa es la evidencia central del TP.
+  <!-- PENDIENTE tras mergear el PR del workflow y activar el gate: reemplazar con el número real del PR de la demo -->
+
+### 5. Problemas encontrados y cómo se resolvieron
+
+| Problema | Causa | Solución |
+|---|---|---|
+| El buscador de status checks no ofrecía `build-backend` / `build-frontend` | GitHub solo lista checks que corrieron en los últimos 7 días; el gate se quería configurar antes de la primera corrida. | Primero se abrió el PR del workflow y se lo dejó correr una vez; recién después aparecieron los dos checks para marcarlos como *Required*. |
+| Riesgo de configurar el gate por API y perder lo del TP1 | El `PUT .../branches/main/protection` **reescribe** la protección entera: todo campo omitido vuelve a su default. | El gate se configuró **por la web** (toca solo lo que se toca). Si se hubiera usado la API, el JSON tendría que re-declarar también los 0 approvals y `enforce_admins` del TP1. |
+| La segunda corrida no mostraba `CACHED` | Los dos pushes salieron casi juntos y las corridas se solaparon: cuando la segunda empezó a construir, la primera todavía no había subido su cache. | Se esperó a que la primera corrida **terminara** (el cache se sube al final) y recién entonces se pushó un commit vacío (`git commit --allow-empty`) para disparar la segunda. |
+| El pipeline daba verde sobre código que no compila | Con el PR del workflow todavía sin mergear, la rama de la demo salía de un `main` que tenía el `ci.yml` esqueleto del TP3 (solo `checkout`). | Se mergeó primero el PR del workflow; la demo del gate se hizo **después**, ya con el workflow real en `main`. |
+
+### 6. Uso de IA
+
+- **Qué se hizo con IA:** con **Claude (Claude Code)** se escribió el `ci.yml` (a partir del
+  paso a paso del enunciado, adaptado al stack Node/Vite de la app), se verificaron las
+  corridas y el `CACHED` en los logs vía `gh run view --log`, y se redactó esta sección.
+- **Qué hizo el alumno a mano:** el merge de los PRs, la configuración del gate en Settings →
+  Branches (marcar los dos checks como *Required* + *strict*), la ejecución de la
+  demostración del gate (romper y arreglar el build), y el tag + release `v4.0.0`.
+- **Qué decidió el alumno (y tiene que poder defender):** la estructura de dos jobs en
+  paralelo, qué se cachea y por qué el pipeline no puede depender del cache, y por qué se
+  construye con el Dockerfile en vez de compilar en el runner.
+- **Cómo se verificó:** las corridas del workflow son públicas en la pestaña *Actions*; el
+  `CACHED` de la segunda corrida se leyó del log real; el gate se comprobó en vivo con el PR
+  de la demostración (check rojo → merge bloqueado → fix → verde → merge).
+
+> **Pendiente del alumno antes de la defensa:** poder responder sin leer — qué es CI y si
+> puede haber CI sin pipeline (y pipeline sin CI); por qué esos triggers; qué NO comparten
+> dos jobs; qué produce el pipeline y dónde queda; qué es el cache y qué pasa si desaparece;
+> qué dos condiciones exige hoy `main` para aceptar un merge; qué significa `strict: true`;
+> y qué conceptos del workflow sobrevivirían a una migración a Azure Pipelines.
+=======
