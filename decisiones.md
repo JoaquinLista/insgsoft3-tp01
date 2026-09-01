@@ -488,4 +488,3 @@ porque "cómo se construye la app" vive en el Dockerfile, no en el pipeline.
 > dos jobs; qué produce el pipeline y dónde queda; qué es el cache y qué pasa si desaparece;
 > qué dos condiciones exige hoy `main` para aceptar un merge; qué significa `strict: true`;
 > y qué conceptos del workflow sobrevivirían a una migración a Azure Pipelines.
-=======
