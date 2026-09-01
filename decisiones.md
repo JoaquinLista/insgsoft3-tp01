@@ -363,8 +363,6 @@ pasa a ser **una tarea** debajo de esa historia.
   #18 al Sprint 1, que había quedado sin sprint, y se cerraron dos épicas duplicadas (#23 y
   #24) creadas mientras se practicaban los comandos `gh issue create`.
 
----
-
 ## TP4 — CI: Pipelines as Code
 
 **Workflow:** [`.github/workflows/ci.yml`](.github/workflows/ci.yml) ·
@@ -490,3 +488,4 @@ porque "cómo se construye la app" vive en el Dockerfile, no en el pipeline.
 > dos jobs; qué produce el pipeline y dónde queda; qué es el cache y qué pasa si desaparece;
 > qué dos condiciones exige hoy `main` para aceptar un merge; qué significa `strict: true`;
 > y qué conceptos del workflow sobrevivirían a una migración a Azure Pipelines.
+=======
