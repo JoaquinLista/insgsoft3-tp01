@@ -84,7 +84,7 @@ siguen esa convención. El historial temprano se dejó como está — refleja el
 | `git push` a `main` rechazado (`GH006`) | La protección de rama exige PR. | Se creó una rama, se pusheó esa, y se integró por PR. Es el comportamiento buscado. |
 | El merge hecho en la web no aparecía en local | El merge ocurrió en el servidor de GitHub, no en la copia local. | `git pull` para traer el commit de merge y sincronizar `main`. |
 | Conflicto en el título del README | Dos ramas cambiaron la misma línea (§3). | Resuelto en la web eligiendo "version A"; merge commit `311ef36`. |
-| PR de revert (#2) abierto por error / prueba | Se estaba practicando el mecanismo de revert. | Se cerró sin mergear; la sección de instalación se rehízo limpia en el PR #3. |
+| PR de revert (#2) abierto y sin usar | Se probó el botón *Revert* de GitHub sobre el PR #1 para ver cómo funciona (genera una rama y un PR que deshacen el merge). | No hacía falta revertir: se cerró el PR #2 sin mergear y la sección de instalación se rehízo limpia en el PR #3. |
 
 ### 7. Uso de IA
 
@@ -103,9 +103,6 @@ Las cuatro capturas que pide el enunciado están en `evidencias.md` §TP1. Las d
 conflicto (aviso en el PR + marcadores) se obtuvieron **recreando** un conflicto idéntico
 (`demo-conflicto-a` / `demo-conflicto-b`), porque el conflicto original (PR #5) no se había
 capturado; el original queda registrado en el merge commit `311ef36`.
-
-> **Pendiente del alumno:** confirmar el relato del PR #2 (revert) — se describió como
-> "prueba del mecanismo de revert de GitHub, después descartada"; ajustar si fue otra cosa.
 
 ---
 
