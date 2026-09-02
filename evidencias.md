@@ -2,8 +2,10 @@
 
 Documento acumulativo. Cada TP agrega su sección con salidas de comandos y capturas.
 
-> Las salidas de abajo son reales, tomadas en una corrida limpia. Para la defensa
-> conviene además agregar capturas de pantalla del navegador (carpeta `evidencias/`).
+> Las salidas y capturas de abajo son reales. La redacción y el ordenamiento de este
+> documento se hicieron con Claude Code sobre el material y las decisiones del alumno
+> (ver `decisiones.md` → "Cómo se escribió este documento"). Para la defensa conviene
+> tener a mano las capturas del navegador de la carpeta `evidencias/`.
 
 ---
 

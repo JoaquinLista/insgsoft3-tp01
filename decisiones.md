@@ -2,6 +2,14 @@
 
 Documento acumulativo de la práctica de ISW3. Cada TP agrega su sección.
 
+> **Cómo se escribió este documento (y `evidencias.md`).** Las secciones no son una salida
+> de IA pegada sin revisar. El método fue iterativo: el alumno aportó las notas, las
+> decisiones y las correcciones de cada TP; **Claude Code** las reformuló y las ordenó para
+> dejar el procedimiento formal y alineado con las buenas prácticas que pide la materia, y a
+> lo largo del trabajo fue haciendo preguntas para ajustar el texto al enfoque que el alumno
+> eligió. Cada sección se revisó antes de entrar por Pull Request. El apartado **"Uso de
+> IA"** de cada TP detalla qué parte fue asistida y cómo se verificó.
+
 ---
 
 ## TP1 — Git colaborativo
@@ -88,10 +96,12 @@ siguen esa convención. El historial temprano se dejó como está — refleja el
 
 ### 7. Uso de IA
 
-- **Qué se hizo con IA:** la redacción de esta sección de `decisiones.md` y de la sección
-  TP1 de `evidencias.md` se reconstruyó con **Claude (Claude Code)** a partir del historial
-  del repositorio (commits, PRs, configuración de protección de rama vía API de GitHub),
-  porque el TP1 no se documentó en el momento.
+- **Qué se hizo con IA:** esta sección de `decisiones.md` y la del TP1 en `evidencias.md` se
+  **reconstruyeron con Claude Code a partir del historial del repositorio** (commits, PRs,
+  configuración de protección de rama vía API de GitHub), porque el TP1 no se documentó en
+  el momento. El alumno contrastó cada afirmación contra lo que recordaba de haber cursado
+  el TP y corrigió lo que no coincidía (ver el método al principio del documento y §6, fila
+  del PR #2).
 - **Qué NO se hizo con IA:** la configuración de la protección de rama, la creación de las
   ramas y PRs, la resolución del conflicto y la publicación del tag/release — todo eso lo
   hizo el alumno cuando cursó el TP1.
@@ -241,7 +251,8 @@ TP7 con `docker buildx` (build multi-arch).
   de los `Dockerfile` (backend, frontend, db), del `docker-compose.yml` /
   `docker-compose.registry.yml`, del `nginx.conf` y de la primera versión de este
   documento se hizo con **Claude (Claude Code)**, a partir de una especificación
-  redactada por el alumno.
+  redactada por el alumno. Las versiones siguientes de esta sección se reformularon sobre
+  las correcciones y notas del alumno (método al principio del documento).
 - **Herramienta:** Claude Code (agente que además ejecuta comandos: corrió
   `docker compose up`, probó los endpoints con `curl` y verificó el frontend).
 - **Cómo se verificó:**
@@ -347,7 +358,8 @@ pasa a ser **una tarea** debajo de esa historia.
 
 - **Qué se hizo con IA:** con **Claude (Claude Code)** se crearon los cinco issues
   (títulos y cuerpos tomados textualmente del enunciado y el video), el esqueleto de
-  `.github/workflows/ci.yml` y su PR (#20, `Closes #17`), y la redacción de esta sección.
+  `.github/workflows/ci.yml` y su PR (#20, `Closes #17`), y la redacción de esta sección
+  sobre las decisiones y notas del alumno (método al principio del documento).
 - **Qué hizo el alumno a mano:** toda la configuración del Project — crearlo, hacerlo
   público, armar la jerarquía de sub-issues, el board, el campo Sprint (2 semanas), la
   asignación de la historia y sus tareas al Sprint 1, el límite de WIP y el merge del PR #20.
@@ -476,7 +488,9 @@ porque "cómo se construye la app" vive en el Dockerfile, no en el pipeline.
 
 - **Qué se hizo con IA:** con **Claude (Claude Code)** se escribió el `ci.yml` (a partir del
   paso a paso del enunciado, adaptado al stack Node/Vite de la app), se verificaron las
-  corridas y el `CACHED` en los logs vía `gh run view --log`, y se redactó esta sección.
+  corridas y el `CACHED` en los logs vía `gh run view --log`, se corrió la demo del gate
+  (PR #27) y se redactó esta sección a partir de las decisiones y correcciones del alumno
+  (método al principio del documento).
 - **Qué hizo el alumno a mano:** el merge de los PRs, la configuración del gate en Settings →
   Branches (marcar los dos checks como *Required* + *strict*), la ejecución de la
   demostración del gate (romper y arreglar el build), y el tag + release `v4.0.0`.
