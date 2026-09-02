@@ -9,7 +9,7 @@ Cada TP agrega una capa sobre la misma aplicación.
 |----|------|-----|
 | TP1 | Git colaborativo + protecciones de rama | `v1.0.0` |
 | TP2 | Contenedores: Dockerfiles multi-stage + Compose + registry | `v2.0.0` |
-| TP3 | Planificación DevOps: GitHub Projects, jerarquía, sprint, trazabilidad | — |
+| TP3 | Planificación DevOps: GitHub Projects, jerarquía, sprint, trazabilidad | `v3.0.0` |
 | TP4 | CI: pipeline de build en cada PR, cache de capas, gate obligatorio | `v4.0.0` |
 
 Decisiones y evidencias, acumuladas TP a TP: [`decisiones.md`](decisiones.md) · [`evidencias.md`](evidencias.md).
