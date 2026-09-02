@@ -234,9 +234,9 @@ end-to-end.
 
 ## TP4 — CI: el pipeline como gate del PR
 
-El enunciado del TP4 no pide capturas (las corridas del pipeline son públicas y
-permanentes en la pestaña *Actions*). Esta sección las agrega igual porque la parte que
-**no** queda registrada sola es el momento en que el pipeline bloquea un merge.
+El enunciado del TP4 **no pide `evidencias.md`**: las corridas del pipeline, los checks
+*Required* bloqueando el merge y el badge son públicos y se ven en vivo en el repo. Esta
+sección queda solo como índice navegable de esa evidencia.
 
 Todo el detalle de decisiones está en [`decisiones.md`](decisiones.md) §TP4.
 
@@ -263,9 +263,7 @@ build-backend    pass   (mismo commit — los dos jobs son independientes)
 ```
 
 Con `build-frontend` en rojo, GitHub marcó el PR como `BLOCKED` y deshabilitó el botón de
-merge.
-
-![PR #27 con el check build-frontend en rojo y el merge bloqueado](evidencias/tp4-pr-rojo.png)
+merge. (Se ve en el PR #27 → pestaña *Commits* → primer commit.)
 
 ### 3. El fix — pipeline en verde, merge habilitado
 
@@ -280,6 +278,5 @@ se ven las dos corridas (la roja del primer commit y la verde del segundo) en la
 Settings → Branches → regla de `main`: *Require status checks to pass before merging* con
 `build-backend` y `build-frontend`, más *Require branches to be up to date before merging*
 (`strict: true`). Se suma a la protección de rama del TP1 (PR obligatorio, *Include
-administrators*), que quedó intacta.
-
-![Regla de rama con los dos checks Required y strict](evidencias/tp4-gate-config.png)
+administrators*), que quedó intacta. Verificable por API:
+`gh api repos/JoaquinLista/insgsoft3-tp01/branches/main/protection`.

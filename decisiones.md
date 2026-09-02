@@ -464,7 +464,7 @@ porque "cómo se construye la app" vive en el Dockerfile, no en el pipeline.
   ([corrida 33582057303](https://github.com/JoaquinLista/insgsoft3-tp01/actions/runs/33582057303)),
   el PR pasó a `CLEAN` y recién ahí se pudo mergear (squash, commit `63af595`). El PR queda
   en el historial con sus dos corridas, roja y verde — es la evidencia central del TP
-  (capturas en [`evidencias.md`](evidencias.md) §TP4).
+  (índice navegable en [`evidencias.md`](evidencias.md) §TP4).
 
 ### 5. Problemas encontrados y cómo se resolvieron
 
