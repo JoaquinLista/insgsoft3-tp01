@@ -229,3 +229,57 @@ end-to-end.
 
 > Nota de arquitectura: las imágenes se construyeron en una PC Intel/AMD (linux/amd64).
 > Multi-arch se resuelve en el TP7 con `docker buildx`.
+
+---
+
+## TP4 — CI: el pipeline como gate del PR
+
+El enunciado del TP4 no pide capturas (las corridas del pipeline son públicas y
+permanentes en la pestaña *Actions*). Esta sección las agrega igual porque la parte que
+**no** queda registrada sola es el momento en que el pipeline bloquea un merge.
+
+Todo el detalle de decisiones está en [`decisiones.md`](decisiones.md) §TP4.
+
+### 1. El pipeline corriendo en cada PR
+
+Dos jobs en paralelo, `build-backend` y `build-frontend`, construyendo las imágenes de la
+app con los Dockerfiles del TP2 (`docker/build-push-action` con `push: false`).
+
+Corridas públicas: pestaña [*Actions*](https://github.com/JoaquinLista/insgsoft3-tp01/actions/workflows/ci.yml)
+del repo.
+
+### 2. Demostración del gate — el pipeline en rojo bloquea el merge
+
+[PR #27](https://github.com/JoaquinLista/insgsoft3-tp01/pull/27) (rama `demo/rompe-el-build`).
+Se agregó a propósito un `import` a un archivo inexistente en `frontend/src/main.jsx`.
+
+**Corrida en rojo** — [run 33581643871](https://github.com/JoaquinLista/insgsoft3-tp01/actions/runs/33581643871):
+
+```
+build-frontend   fail   Could not resolve "./modulo-inexistente.js" from "src/main.jsx"
+                        process "/bin/sh -c npm run build" did not complete successfully: exit code: 1
+                        ERROR: buildx failed
+build-backend    pass   (mismo commit — los dos jobs son independientes)
+```
+
+Con `build-frontend` en rojo, GitHub marcó el PR como `BLOCKED` y deshabilitó el botón de
+merge.
+
+![PR #27 con el check build-frontend en rojo y el merge bloqueado](evidencias/tp4-pr-rojo.png)
+
+### 3. El fix — pipeline en verde, merge habilitado
+
+Un segundo commit sacó el `import`. El pipeline volvió a correr solo sobre la mezcla con
+`main` y los dos checks pasaron a verde — [run 33582057303](https://github.com/JoaquinLista/insgsoft3-tp01/actions/runs/33582057303).
+El PR pasó a `CLEAN` y se pudo mergear (squash, commit `63af595`). En el PR #27 ya mergeado
+se ven las dos corridas (la roja del primer commit y la verde del segundo) en la pestaña
+*Checks*.
+
+### 4. Configuración del gate
+
+Settings → Branches → regla de `main`: *Require status checks to pass before merging* con
+`build-backend` y `build-frontend`, más *Require branches to be up to date before merging*
+(`strict: true`). Se suma a la protección de rama del TP1 (PR obligatorio, *Include
+administrators*), que quedó intacta.
+
+![Regla de rama con los dos checks Required y strict](evidencias/tp4-gate-config.png)

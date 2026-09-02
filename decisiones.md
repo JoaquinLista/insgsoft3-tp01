@@ -451,22 +451,29 @@ porque "cómo se construye la app" vive en el Dockerfile, no en el pipeline.
   estar **actualizada con `main`**: si entre medio se mergeó otro PR, hay que apretar
   *Update branch* y volver a correr el pipeline sobre la mezcla nueva antes de poder
   mergear. Evita mergear algo que dio verde contra un `main` que ya no existe.
-- **Demostración del gate actuando** (PR de la rama `demo/rompe-el-build`): se rompió a
-  propósito la construcción de una de las imágenes (un `import` a un archivo inexistente en
-  el frontend, que el bundler de Vite resuelve *durante* el build y falla), se abrió el PR y
-  el check quedó en **rojo con el merge bloqueado**; un segundo commit sacó el error, el
-  pipeline volvió a correr solo, pasó a **verde** y recién ahí se pudo mergear. El PR quedó
-  en el historial con sus corridas roja y verde — esa es la evidencia central del TP.
-  <!-- PENDIENTE tras mergear el PR del workflow y activar el gate: reemplazar con el número real del PR de la demo -->
+- **Demostración del gate actuando** ([PR #27](https://github.com/JoaquinLista/insgsoft3-tp01/pull/27),
+  rama `demo/rompe-el-build`): en `frontend/src/main.jsx` se agregó un `import` a
+  `./modulo-inexistente.js`. Vite/Rollup resuelve los imports *durante* `npm run build`
+  (etapa `build` del Dockerfile del frontend), así que el `docker build` del job
+  **`build-frontend` falló** ([corrida 33581643871](https://github.com/JoaquinLista/insgsoft3-tp01/actions/runs/33581643871):
+  `Could not resolve "./modulo-inexistente.js" from "src/main.jsx"`). **`build-backend` pasó
+  en verde en la misma corrida** — prueba en vivo de que los dos jobs son independientes.
+  Con `build-frontend` en rojo, GitHub reportó el PR como `BLOCKED` y el botón de merge quedó
+  deshabilitado. Un segundo commit sacó el `import`; el pipeline volvió a correr solo sobre
+  la mezcla con `main`, los dos checks pasaron a verde
+  ([corrida 33582057303](https://github.com/JoaquinLista/insgsoft3-tp01/actions/runs/33582057303)),
+  el PR pasó a `CLEAN` y recién ahí se pudo mergear (squash, commit `63af595`). El PR queda
+  en el historial con sus dos corridas, roja y verde — es la evidencia central del TP
+  (capturas en [`evidencias.md`](evidencias.md) §TP4).
 
 ### 5. Problemas encontrados y cómo se resolvieron
 
 | Problema | Causa | Solución |
 |---|---|---|
-| El buscador de status checks no ofrecía `build-backend` / `build-frontend` | GitHub solo lista checks que corrieron en los últimos 7 días; el gate se quería configurar antes de la primera corrida. | Primero se abrió el PR del workflow y se lo dejó correr una vez; recién después aparecieron los dos checks para marcarlos como *Required*. |
-| Riesgo de configurar el gate por API y perder lo del TP1 | El `PUT .../branches/main/protection` **reescribe** la protección entera: todo campo omitido vuelve a su default. | El gate se configuró **por la web** (toca solo lo que se toca). Si se hubiera usado la API, el JSON tendría que re-declarar también los 0 approvals y `enforce_admins` del TP1. |
+| Para marcar `build-backend` / `build-frontend` como *Required*, el buscador de la regla de rama solo ofrece checks que corrieron en los últimos 7 días | Un check que nunca corrió no existe para GitHub todavía | No hizo falta ningún truco: el workflow ya venía corriendo desde el PR #22, así que los dos checks aparecían en el buscador. Si el gate se configurara junto con el primer workflow, habría que abrir un PR y dejarlo correr una vez antes. |
+| Riesgo de configurar el gate por API y perder lo del TP1 | El `PUT .../branches/main/protection` **reescribe** la protección entera: todo campo omitido vuelve a su default. | El gate se configuró **por la web** (toca solo lo que se toca). Después se verificó por API que quedaron `strict: true` + los dos checks requeridos **y** que sobrevivieron los `0 approvals` y el `enforce_admins` del TP1. |
 | La segunda corrida no mostraba `CACHED` | Los dos pushes salieron casi juntos y las corridas se solaparon: cuando la segunda empezó a construir, la primera todavía no había subido su cache. | Se esperó a que la primera corrida **terminara** (el cache se sube al final) y recién entonces se pushó un commit vacío (`git commit --allow-empty`) para disparar la segunda. |
-| El pipeline daba verde sobre código que no compila | Con el PR del workflow todavía sin mergear, la rama de la demo salía de un `main` que tenía el `ci.yml` esqueleto del TP3 (solo `checkout`). | Se mergeó primero el PR del workflow; la demo del gate se hizo **después**, ya con el workflow real en `main`. |
+| La demo del gate no se podía hacer hasta tener todo lo anterior en su lugar | Necesita tres cosas ya en `main`: el workflow real (no el esqueleto del TP3), los dos jobs habiendo corrido al menos una vez, y la regla de rama marcándolos como *Required*. | La demo (PR #27) se dejó para el final, después de mergear el workflow (PR #22) y activar el gate. Si se hiciera antes, la rama rota saldría de un `main` sin el `ci.yml` real y el check daría verde sobre código que no compila. |
 
 ### 6. Uso de IA
 
@@ -480,8 +487,11 @@ porque "cómo se construye la app" vive en el Dockerfile, no en el pipeline.
   paralelo, qué se cachea y por qué el pipeline no puede depender del cache, y por qué se
   construye con el Dockerfile en vez de compilar en el runner.
 - **Cómo se verificó:** las corridas del workflow son públicas en la pestaña *Actions*; el
-  `CACHED` de la segunda corrida se leyó del log real; el gate se comprobó en vivo con el PR
-  de la demostración (check rojo → merge bloqueado → fix → verde → merge).
+  `CACHED` de la segunda corrida se leyó del log real; el gate se comprobó en vivo con el
+  PR #27 (con `build-frontend` en rojo el PR quedó en `BLOCKED` y el merge deshabilitado;
+  con los dos checks en verde pasó a `CLEAN` y se pudo mergear); la configuración de la
+  protección de rama se releyó por API para confirmar `strict: true` + los dos checks
+  requeridos sin perder lo del TP1.
 
 > **Pendiente del alumno antes de la defensa:** poder responder sin leer — qué es CI y si
 > puede haber CI sin pipeline (y pipeline sin CI); por qué esos triggers; qué NO comparten
