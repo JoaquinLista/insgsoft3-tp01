@@ -509,3 +509,197 @@ porque "cómo se construye la app" vive en el Dockerfile, no en el pipeline.
 > dos jobs; qué produce el pipeline y dónde queda; qué es el cache y qué pasa si desaparece;
 > qué dos condiciones exige hoy `main` para aceptar un merge; qué significa `strict: true`;
 > y qué conceptos del workflow sobrevivirían a una migración a Azure Pipelines.
+
+---
+
+## TP5 — Testing y calidad
+
+**Workflow:** [`.github/workflows/ci.yml`](.github/workflows/ci.yml) (extendido sobre el del TP4) ·
+**Suites:** [`backend/src/services/pedidosService.test.js`](backend/src/services/pedidosService.test.js) ·
+[`frontend/src/lib/`](frontend/src/lib/) ·
+**PRs:** [#32](https://github.com/JoaquinLista/insgsoft3-tp01/pull/32) (reglas de negocio) ·
+[#33](https://github.com/JoaquinLista/insgsoft3-tp01/pull/33) (suite) ·
+[#34](https://github.com/JoaquinLista/insgsoft3-tp01/pull/34) (coverage + gate) ·
+[#35](https://github.com/JoaquinLista/insgsoft3-tp01/pull/35) (demo mergeada) ·
+[#36](https://github.com/JoaquinLista/insgsoft3-tp01/pull/36) (demo vigente, **no mergear**)
+
+El stack de la app es **Node/Express + React/Vite**, no el `.NET + vitest` del ejemplo de la
+cátedra — pero el frontend de la cátedra también usa vitest, así que acá los **dos** lados
+(backend incluido) usan el mismo mecanismo nativo de `vitest`/`@vitest/coverage-v8`: no hizo
+falta nada de `coverlet` ni de ReportGenerator, que son específicos de .NET.
+
+### 0. Qué se montó
+
+| Pieza | Cómo quedó |
+|---|---|
+| Suite backend | `vitest`, 12 tests / 8 métodos, sobre `pedidosService.js` |
+| Suite frontend | `vitest`, 9 tests / 5 métodos, sobre `frontend/src/lib/` |
+| Coverage backend | `@vitest/coverage-v8`, provider v8, umbral `lines ≥ 30 / branches ≥ 25` |
+| Coverage frontend | igual herramienta, umbral `lines ≥ 90 / branches ≥ 75` |
+| Gate | corre **adentro** de `build-backend` / `build-frontend` (los *required checks* del TP4) — no se agregó ningún job ni ninguna protección nueva |
+| Reporte | resumen en el *Summary* de cada corrida + reporte HTML descargable como artefacto (`coverage-backend`, `coverage-frontend`) |
+| Demo del gate | 2 Pull Requests — uno cuenta la secuencia completa y está mergeado, el otro queda abierto y en rojo hasta la defensa |
+
+### 1. Qué lógica se eligió testear y por qué
+
+Antes de testear hubo que terminar de escribir la lógica: el PR #32 cierra la **máquina de
+estados del pedido** (HU-08: `PENDIENTE → EN_PREPARACION → DESPACHADO → ENTREGADO`, con
+`CANCELADO` como salida) y agrega el **descuento de stock al despachar** (HU-11). Son las dos
+reglas elegidas para testear, y la razón es dónde duele un bug en esta app: si la máquina de
+estados dejara pasar una transición inválida, un pedido podría llegar a `ENTREGADO` sin pasar
+por `DESPACHADO` (sin descontar stock); si el descuento de stock tuviera un error de signo o
+no chequeara que alcanza, un despacho real podría dejar el stock de un producto en negativo —
+el `CHECK (stock_actual >= 0)` de la base lo frenaría igual, pero el pedido ya habría quedado a
+medio camino. Son las dos reglas con más impacto operativo de todo lo que hay hoy en la app.
+
+### 2. La suite del backend (Tarea 1)
+
+8 métodos de test (12 casos contando los parametrizados), repartidos en **4 reglas distintas**:
+
+| Regla | Técnica | Qué verifica |
+|---|---|---|
+| `esTransicionValida` (HU-08) | **parametrizado** (`it.each`, 5 casos) | transición válida, salto de estado, retroceso, estado final |
+| `calcularDescuentoStock` (HU-11) | 3 tests | alcanza, no alcanza (**caso de error**), producto sin stock registrado |
+| `crearPedido` | 3 tests | origen = destino, sin detalles, cantidad ≤ 0 — se rechazan **antes** de tocar la base, por eso no necesitan mock |
+| `cambiarEstado` | **con mock** del módulo `config/db.js` | si el stock no alcanza, no se ejecuta ningún `UPDATE` y sí se ejecuta `ROLLBACK` — el assert mira la **interacción**, no un valor de retorno |
+
+Antes de dar la suite por cerrada, se invirtió a mano una transición válida en `TRANSICIONES`
+(se dejó pasar `PENDIENTE → DESPACHADO`) y se confirmó que el test parametrizado se ponía en
+rojo — para no quedarse con asserts que no verifican nada. Se revirtió después.
+
+### 3. El frontend: hubo que refactorizar para poder testear
+
+`App.jsx` no tenía ninguna lógica separable del componente: todo vivía adentro de
+`TableroPedidos`, que solo corre montando el DOM. Se extrajo a `frontend/src/lib/`:
+
+- `pedidos.js` — `armarDetallesValidos` (filtra y normaliza los ítems del formulario) y
+  `validarNuevoPedido` (las reglas de validación, que antes vivían como `if` sueltos dentro del
+  handler de submit).
+- `api.js` — `apiGet`/`apiPost`, que antes también vivían dentro de `App.jsx`.
+
+El comportamiento no cambió — es el mismo código, movido. 5 tests, mismas 3 técnicas que el
+backend: `it.each` parametrizado sobre `validarNuevoPedido`, un caso de error explícito (mensaje
+de "origen y destino distintos"), y 2 con mock de `fetch` global (`vi.stubGlobal`) — uno
+verifica la interacción (`apiPost` llama a `fetch` con el método/headers/body exactos, un mock
+en el sentido estricto del término), el otro lo usa como stub para forzar una respuesta de error
+del servidor y comprobar que `apiGet` la propaga.
+
+No se testearon componentes React (`App.jsx`, `main.jsx`): requiere jsdom + Testing Library, y
+la cátedra lo marca explícitamente como **opcional avanzado, no exigido por este TP** — la UI
+completa se verifica *end-to-end* en el TP7, contra la app desplegada de verdad.
+
+### 4. Coverage: qué entra en la cuenta y por qué el umbral es ese
+
+**Backend — hoy: 33,82 % de líneas, 35,1 % de ramas** (umbral: `lines ≥ 30`, `branches ≥ 25`).
+`include` cubre `controllers/`, `routes/` y los **4** servicios completos — no solo
+`pedidosService`, que es el único que tiene tests. Se excluyeron solo dos archivos:
+`src/index.js` (arranque de Express: cablea middlewares y rutas, sin ninguna regla de negocio —
+equivalente al `Program.cs` del ejemplo de la cátedra) y `src/config/db.js` (conexión a
+Postgres, infraestructura sin reglas). El número da bajo **a propósito**: `insumosService`,
+`productosService`, `sucursalesService` y los controllers no tienen un solo test todavía, y
+entran igual a la cuenta — excluirlos para que el número subiera habría sido exactamente la
+trampa que el enunciado marca como tal. El umbral se puso un poco por debajo de la medición real
+de hoy (no en el número exacto) para tener margen ante una fluctuación mínima sin dejar de
+frenar una baja real.
+
+**Frontend — hoy: 91,83 % de líneas, 80 % de ramas** (umbral: `lines ≥ 90`, `branches ≥ 75`).
+`include: ['src/lib/**']` — ahí vive toda la lógica que tiene test. Quedan afuera `App.jsx` y
+`main.jsx` por lo explicado en el punto 3: son componentes de React sin lógica propia después
+del refactor, y testearlos pide herramientas que este TP no exige.
+
+### 5. Por qué un coverage alto no prueba nada (con un ejemplo propio)
+
+El test `descuenta cuando el stock alcanza` de `calcularDescuentoStock` pasa por `resultado.ok`
+y `resultado.nuevosStocks.get(1)` — si alguien borrara esos dos `expect` y dejara solo la
+llamada a la función, el archivo seguiría marcando esa línea como "ejecutada" (100 % de
+cobertura de esa rama) sin comprobar absolutamente nada: ni que el resultado sea `true`, ni que
+el número descontado sea el correcto. Es la misma trampa que el apunte de la materia muestra con
+`Precios.ConDescuento`: coverage mide **ejecución**, no **verificación**. Por eso el número de
+coverage sirve para encontrar agujeros (código que ningún test toca) y como tendencia, pero no
+es una medida de que la lógica haga lo que tiene que hacer — eso lo custodian los asserts, no el
+porcentaje.
+
+### 6. El ejercicio de la rama sin cubrir
+
+En `esTransicionValida` ([`pedidosService.js:24`](backend/src/services/pedidosService.js#L24)):
+
+```js
+export const esTransicionValida = (estadoActual, estadoNuevo) =>
+  (TRANSICIONES[estadoActual] ?? []).includes(estadoNuevo);
+```
+
+El reporte de ReportGenerator-equivalente (HTML de v8) marca la rama del `?? []` como no
+cubierta: en ningún test `estadoActual` es una clave ausente de `TRANSICIONES`.
+
+1. **Qué línea es:** la del `??`, no hay ningún `if` visible — es exactamente el tipo de rama
+   que abre un operador y no una instrucción (la pista de la guía).
+2. **Qué entrada la recorrería:** un `estadoActual` que no sea ninguna de las 5 claves de
+   `TRANSICIONES` (`PENDIENTE`, `EN_PREPARACION`, `DESPACHADO`, `ENTREGADO`, `CANCELADO`).
+3. **Qué se decidió:** **no agregar un test.** El `CHECK (estado IN (...))` de la tabla
+   `pedidos` en `database/init.sql` solo permite esas 5 claves, y las 5 están mapeadas en
+   `TRANSICIONES` — hoy no hay ningún `estadoActual` real que pueda disparar esa rama. Agregar
+   un test significaría inventar un estado que la base no puede producir, solo para subir el
+   número. El `?? []` queda como una guarda defensiva para el día que alguien agregue un sexto
+   estado al `CHECK` y se olvide de agregarlo a `TRANSICIONES` — ahí la rama pasaría a ser
+   alcanzable, y recién ahí ameritaría un test.
+
+### 7. El gate bloqueando un merge (Tarea 3)
+
+Dos Pull Requests, a propósito:
+
+- **[PR #35](https://github.com/JoaquinLista/insgsoft3-tp01/pull/35)** (mergeado) — primer
+  commit agrega `prioridadDespacho` en `pedidosService.js`, sin un solo test: compila perfecto,
+  no rompe ningún test existente, y la cobertura de **líneas** cae de 30,88 % a **29,9 %**
+  contra el umbral de 30 %.
+  [Corrida roja](https://github.com/JoaquinLista/insgsoft3-tp01/actions/runs/38561494914):
+  `ERROR: Coverage for lines (29.9%) does not meet global threshold (30%)` — `build-backend`
+  falló, `build-frontend` siguió en verde (son independientes, igual que en el TP4). Un
+  segundo commit agregó los 4 tests que faltaban, uno por camino de la función (sin fecha,
+  reciente, de esta semana, atrasado):
+  [corrida verde](https://github.com/JoaquinLista/insgsoft3-tp01/actions/runs/38561781362). El
+  PR quedó con su historial completo y se mergeó.
+- **[PR #36](https://github.com/JoaquinLista/insgsoft3-tp01/pull/36)** (abierto, **no se
+  mergea hasta la defensa**) — mismo tipo de problema, en `productosService.js`
+  (`clasificarStock`, `sugerirReposicion`, `urgenciaReposicion`, sin tests): 29,87 % de líneas
+  contra el mismo umbral de 30 %.
+  [Corrida roja vigente](https://github.com/JoaquinLista/insgsoft3-tp01/actions/runs/38562378273).
+  `gh pr view 36` confirma `mergeStateStatus: BLOCKED` — el freno es real, no solo visual; el
+  botón de merge está apagado.
+
+### 8. Problemas encontrados y cómo se resolvieron
+
+| Problema | Causa | Solución |
+|---|---|---|
+| `npm i -D vitest` falló con `ERESOLVE` en el frontend | `vitest@5` pide Vite 6/7/8; el proyecto usa Vite 5 | Se fijó `vitest@^3.2.7` (la última de la serie compatible con Vite 5) en vez de forzar con `--force`, tal como advierte la guía |
+| `npm run test:ci` falla en Windows con `ENOENT: … \${COVERAGE_DIR:-coverage}` | Esa expansión es de `sh`; en Windows `npm run` usa `cmd.exe`, que no la interpreta | Es el comportamiento esperado fuera de Linux: localmente se corre `npm test -- --run --coverage`; `test:ci` es la receta que usa el contenedor del pipeline (Linux), donde sí expande bien |
+| `docker run -v` no dejaba el reporte visible en el host al probarlo a mano en Windows | Git Bash (MSYS) reescribe argumentos que empiezan con `/`, y además los bind mounts de Docker Desktop sobre rutas de Git Bash no siempre se resuelven | No se insistió en reproducir el volumen en Windows: se verificó que la etapa de test compila y corre bien dentro del contenedor (Linux), y la prueba real se hizo en el pipeline (GitHub Actions, que corre en Linux) |
+| El PR de cobertura (#34) se commiteó por error arriba de la rama ya mergeada del PR #33 | El repo mergea por *squash*: la rama vieja queda con una historia que diverge del `main` real una vez mergeada | Se movió el commit a una rama nueva (`feat/tp5-coverage-gate`), creada desde el `main` ya actualizado, con `git cherry-pick` |
+| El segundo PR de la demo (#36) no bajaba la cobertura con una sola función | Después de mergear el PR #35 el margen real subió (33,8 % de líneas) | Se midió en la máquina después de cada cambio hasta encontrar el tamaño justo (3 funciones chicas sin tests), en vez de adivinar un número |
+
+### 9. Uso de IA
+
+- **Qué se hizo con IA:** con **Claude (Claude Code)** se escribió la lógica de negocio de
+  HU-08/HU-11, la suite de tests de los dos lados, la configuración de coverage y el umbral,
+  los 4 pasos nuevos del `ci.yml`, y la secuencia de los dos PRs de la demostración del gate.
+  Se verificaron en vivo (corridas, logs, `mergeStateStatus`) antes de darlas por buenas, y se
+  redactó esta sección a partir de las decisiones y correcciones del alumno (método al
+  principio del documento).
+- **Qué decidió el alumno (y tiene que poder defender):** agregar HU-11 (el descuento de stock
+  no estaba pedido por ningún TP anterior, fue una decisión de reforzar las reglas de negocio
+  antes de testear), los números de los dos umbrales, y qué queda afuera de la cuenta de
+  coverage en cada lado.
+- **Cómo se verificó:** cada número de este documento se corrió y se leyó de una corrida real
+  (no se copió de la guía); el umbral se probó subiéndolo a mano por encima de lo real para
+  confirmar que corta el build (`exit 1`) y devolviéndolo después; la demostración del gate se
+  comprobó con `gh pr checks` y `gh pr view --json mergeStateStatus`, no solo mirando el color
+  en la web.
+
+> **Pendiente del alumno antes de la defensa:** dibujar la pirámide de testing y ubicar dónde
+> está parada la suite hoy; señalar Arrange/Act/Assert en un test propio; explicar la
+> diferencia entre el mock de `cambiarEstado` (verifica interacción) y el de `apiGet` (actúa
+> como stub); explicar por qué branch coverage puede mentir más que line coverage con un
+> ejemplo propio; defender el número de cada umbral y qué pasaría si se subiera diez puntos;
+> mostrar el PR #35 y explicar por qué compilaba bien y tenía los tests en verde y aun así no se
+> podía mergear; mostrar el PR #36 en vivo; y decir qué de un cambio **ninguno** de los tres
+> guardianes de `main` (PR + build + cobertura) puede detectar, y qué de eso sí podría
+> revisarte hoy un agente de IA.
