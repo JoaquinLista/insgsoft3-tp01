@@ -19,4 +19,12 @@ export default defineConfig({
     outDir: 'dist',
     sourcemap: false,
   },
+  test: {
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'html', 'lcov', 'json-summary'],
+      include: ['src/lib/**'],
+      thresholds: { lines: 90, branches: 75 },
+    },
+  },
 });

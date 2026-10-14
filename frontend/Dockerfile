@@ -10,7 +10,11 @@ RUN npm ci
 COPY . .
 RUN npm run build
 
-# ---- Etapa 2: servidor de producción ----
+# ---- Etapa 2: tests (parte del build: ya tiene Node y las dependencias) ----
+FROM build AS test
+ENTRYPOINT ["npm", "run", "test:ci"]
+
+# ---- Etapa 3: servidor de producción ----
 FROM nginx:1.27-alpine AS runtime
 LABEL org.opencontainers.image.source="https://github.com/JoaquinLista/insgsoft3-tp01"
 RUN rm /etc/nginx/conf.d/default.conf
