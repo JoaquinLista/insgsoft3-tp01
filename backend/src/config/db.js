@@ -9,6 +9,9 @@ const {
   POSTGRES_DB = 'panaderias',
   POSTGRES_USER = 'panaderias',
   POSTGRES_PASSWORD = 'panaderias',
+  // Neon (y la mayoría de los Postgres gestionados) exigen SSL; el Postgres del
+  // docker-compose local no lo soporta. Misma imagen, dos configuraciones por entorno.
+  POSTGRES_SSL = 'false',
 } = process.env;
 
 const pool = new pg.Pool({
@@ -17,6 +20,7 @@ const pool = new pg.Pool({
   database: POSTGRES_DB,
   user: POSTGRES_USER,
   password: POSTGRES_PASSWORD,
+  ssl: POSTGRES_SSL === 'true' ? { rejectUnauthorized: false } : false,
   max: 10,
   idleTimeoutMillis: 30_000,
   connectionTimeoutMillis: 10_000,

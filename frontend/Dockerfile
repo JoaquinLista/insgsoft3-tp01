@@ -18,8 +18,15 @@ ENTRYPOINT ["npm", "run", "test:ci"]
 FROM nginx:1.27-alpine AS runtime
 LABEL org.opencontainers.image.source="https://github.com/JoaquinLista/insgsoft3-tp01"
 RUN rm /etc/nginx/conf.d/default.conf
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+# La imagen oficial de nginx procesa /etc/nginx/templates/*.template con envsubst
+# al arrancar y reemplaza las variables ${...} por su valor del entorno.
+COPY default.conf.template /etc/nginx/templates/default.conf.template
 COPY --from=build /app/dist /usr/share/nginx/html
+
+# Valores por defecto = los de docker-compose (red interna de Docker).
+# Render los pisa con las variables que configura cada servicio.
+ENV BACKEND_URL=http://backend:3000 \
+    DNS_RESOLVER=127.0.0.11
 
 EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]

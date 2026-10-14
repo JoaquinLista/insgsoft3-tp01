@@ -10,17 +10,19 @@ server {
     gzip_types text/plain text/css application/javascript application/json image/svg+xml;
     gzip_min_length 1024;
 
-    # DNS interno de Docker: resuelve el nombre "backend" en cada request, no al
-    # arrancar. Con el nombre escrito directo en proxy_pass, nginx se niega a
-    # levantar si el backend todavía no existe ("host not found in upstream").
-    resolver 127.0.0.11 valid=10s ipv6=off;
-    set $backend_api http://backend:3000;
+    # La dirección del backend y el DNS llegan por variables de entorno: en compose,
+    # el nombre del servicio y el DNS interno de Docker; en Render, la URL pública de
+    # la api de ESTE entorno y un DNS público. La imagen es la misma en todos los
+    # entornos — lo que cambia es la config que Render le inyecta al arrancar.
+    resolver ${DNS_RESOLVER} valid=10s ipv6=off;
+    set $backend_api ${BACKEND_URL};
 
-    # Todo lo que llega a /api/ se reenvía al backend por la red interna de compose.
+    # Todo lo que llega a /api/ se reenvía al backend.
     # proxy_pass con variable y SIN barra final: se preserva la URI completa
-    # (/api/pedidos -> http://backend:3000/api/pedidos).
+    # (/api/pedidos -> $backend_api/api/pedidos).
     location /api/ {
         proxy_pass $backend_api;
+        proxy_ssl_server_name on;   # si el backend es https (Render), el TLS necesita saber a qué host va
         proxy_http_version 1.1;
         proxy_set_header Host              $host;
         proxy_set_header X-Real-IP         $remote_addr;
