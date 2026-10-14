@@ -1,32 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-
-const API = '/api';
-
-/* ------------------------------------------------------------------ */
-/*  Helpers de red                                                     */
-/* ------------------------------------------------------------------ */
-
-async function apiGet(path) {
-  const res = await fetch(`${API}${path}`);
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || `Error ${res.status} al consultar ${path}`);
-  }
-  return res.json();
-}
-
-async function apiPost(path, payload) {
-  const res = await fetch(`${API}${path}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    throw new Error(body.error || `Error ${res.status} al enviar a ${path}`);
-  }
-  return body;
-}
+import { apiGet, apiPost } from './lib/api.js';
+import { armarDetallesValidos, validarNuevoPedido } from './lib/pedidos.js';
 
 const ESTADOS_PEDIDO = ['PENDIENTE', 'EN_PREPARACION', 'DESPACHADO', 'ENTREGADO'];
 
@@ -114,20 +88,10 @@ function TableroPedidos({ sucursales, productos }) {
     setError('');
     setOkMsg('');
 
-    if (!origen || !destino) {
-      setError('Seleccioná sucursal de origen y destino.');
-      return;
-    }
-    if (origen === destino) {
-      setError('El origen y el destino deben ser distintos.');
-      return;
-    }
-    const detalles = items
-      .filter((it) => it.producto_id && Number(it.cantidad) > 0)
-      .map((it) => ({ producto_id: Number(it.producto_id), cantidad: Number(it.cantidad) }));
-
-    if (detalles.length === 0) {
-      setError('Agregá al menos un producto con cantidad mayor a 0.');
+    const detalles = armarDetallesValidos(items);
+    const validacion = validarNuevoPedido({ origen, destino, detalles });
+    if (!validacion.valido) {
+      setError(validacion.error);
       return;
     }
 
