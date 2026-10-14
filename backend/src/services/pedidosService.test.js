@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { esTransicionValida, calcularDescuentoStock, crearPedido, cambiarEstado } from './pedidosService.js';
+import {
+  esTransicionValida,
+  calcularDescuentoStock,
+  crearPedido,
+  cambiarEstado,
+  prioridadDespacho,
+} from './pedidosService.js';
 
 vi.mock('../config/db.js', () => ({
   query: vi.fn(),
@@ -101,5 +107,25 @@ describe('cambiarEstado — con mock de la base (HU-11 integrado a la transacci�
     expect(sqlLlamados.some((s) => s.startsWith('UPDATE pedidos'))).toBe(false);
     expect(sqlLlamados).toContain('ROLLBACK');
     expect(client.release).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('prioridadDespacho', () => {
+  const ahora = new Date('2026-10-14T12:00:00Z');
+
+  it('devuelve sin-fecha si el pedido no tiene fecha de creación', () => {
+    expect(prioridadDespacho({}, ahora)).toBe('sin-fecha');
+  });
+
+  it('devuelve reciente dentro del primer día', () => {
+    expect(prioridadDespacho({ fecha_creacion: '2026-10-14T06:00:00Z' }, ahora)).toBe('reciente');
+  });
+
+  it('devuelve esta-semana antes de los siete días', () => {
+    expect(prioridadDespacho({ fecha_creacion: '2026-10-10T12:00:00Z' }, ahora)).toBe('esta-semana');
+  });
+
+  it('devuelve atrasado pasados los siete días', () => {
+    expect(prioridadDespacho({ fecha_creacion: '2026-09-01T12:00:00Z' }, ahora)).toBe('atrasado');
   });
 });
