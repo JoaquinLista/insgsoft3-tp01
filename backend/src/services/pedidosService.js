@@ -1,6 +1,57 @@
 import { query, getClient } from '../config/db.js';
 
-const ESTADOS_VALIDOS = ['PENDIENTE', 'EN_PREPARACION', 'DESPACHADO', 'ENTREGADO'];
+const ESTADOS_VALIDOS = ['PENDIENTE', 'EN_PREPARACION', 'DESPACHADO', 'ENTREGADO', 'CANCELADO'];
+
+/**
+ * Máquina de estados del pedido (HU-08). Cada clave es un estado de origen; el arreglo,
+ * los estados a los que se puede pasar desde ahí. Un estado ausente o con arreglo vacío
+ * es un estado final: no admite ninguna transición.
+ */
+const TRANSICIONES = {
+  PENDIENTE: ['EN_PREPARACION', 'CANCELADO'],
+  EN_PREPARACION: ['DESPACHADO', 'CANCELADO'],
+  DESPACHADO: ['ENTREGADO'],
+  ENTREGADO: [],
+  CANCELADO: [],
+};
+
+/**
+ * ¿Se puede pasar de `estadoActual` a `estadoNuevo`? Función pura: no toca la base,
+ * solo consulta la tabla de transiciones. HU-10 se apoya en ella para rechazar saltos,
+ * retrocesos y salidas de un estado final.
+ */
+export const esTransicionValida = (estadoActual, estadoNuevo) =>
+  (TRANSICIONES[estadoActual] ?? []).includes(estadoNuevo);
+
+/**
+ * Calcula el descuento de stock de un pedido al despacharse (HU-11). Función pura:
+ * recibe el stock actual de cada producto y los detalles a descontar, y devuelve el
+ * resultado sin tocar la base — ni ejecuta la resta si algún producto no alcanza.
+ * @param {Map<number, number>} stocksActuales  stock_actual de cada producto, por id
+ * @param {Array<{ producto_id: number, cantidad: number }>} detalles
+ * @returns {{ ok: true, nuevosStocks: Map<number, number> } | { ok: false, error: string }}
+ */
+export const calcularDescuentoStock = (stocksActuales, detalles) => {
+  const nuevosStocks = new Map(stocksActuales);
+
+  for (const { producto_id: productoId, cantidad } of detalles) {
+    const stockActual = nuevosStocks.get(productoId);
+
+    if (stockActual === undefined) {
+      return { ok: false, error: `El producto ${productoId} no tiene stock registrado` };
+    }
+    if (stockActual < cantidad) {
+      return {
+        ok: false,
+        error: `Stock insuficiente del producto ${productoId}: hay ${stockActual}, se necesitan ${cantidad}`,
+      };
+    }
+
+    nuevosStocks.set(productoId, stockActual - cantidad);
+  }
+
+  return { ok: true, nuevosStocks };
+};
 
 /**
  * Lista todos los pedidos con la info de sus sucursales y el detalle de productos.
@@ -131,6 +182,88 @@ export const crearPedido = async (data) => {
     throw error;
   } finally {
     client.release();
+  }
+};
+
+/**
+ * Mueve un pedido al siguiente estado de su ciclo de vida (HU-08), rechazando
+ * transiciones que no están en el diagrama de estados (HU-09/HU-10).
+ * @param {number} id
+ * @param {string} estadoNuevo
+ */
+export const cambiarEstado = async (id, estadoNuevo) => {
+  const estado = String(estadoNuevo ?? '').toUpperCase();
+
+  if (!ESTADOS_VALIDOS.includes(estado)) {
+    const err = new Error(`Estado inválido. Válidos: ${ESTADOS_VALIDOS.join(', ')}`);
+    err.status = 400;
+    throw err;
+  }
+
+  const client = await getClient();
+  try {
+    await client.query('BEGIN');
+
+    const { rows } = await client.query('SELECT estado FROM pedidos WHERE id = $1', [id]);
+    if (rows.length === 0) {
+      const err = new Error(`No existe el pedido ${id}`);
+      err.status = 404;
+      throw err;
+    }
+    const estadoActual = rows[0].estado;
+
+    if (!esTransicionValida(estadoActual, estado)) {
+      const err = new Error(`No se puede pasar de "${estadoActual}" a "${estado}"`);
+      err.status = 409;
+      throw err;
+    }
+
+    if (estado === 'DESPACHADO') {
+      await descontarStockDelPedido(client, id);
+    }
+
+    await client.query('UPDATE pedidos SET estado = $1 WHERE id = $2', [estado, id]);
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+
+  const [actualizado] = await listarPedidosPorIds([id]);
+  return actualizado;
+};
+
+/**
+ * Descuenta el stock de los productos de un pedido al despacharse (HU-11), dentro de
+ * la misma transacción que `cambiarEstado`: si el stock no alcanza, lanza y el caller
+ * hace ROLLBACK — el pedido no llega a quedar en DESPACHADO a medio descontar.
+ * `FOR UPDATE` bloquea las filas de producto leídas para que dos despachos concurrentes
+ * del mismo producto no lean el mismo stock y lo descuenten los dos sin verse.
+ */
+const descontarStockDelPedido = async (client, pedidoId) => {
+  const { rows: detalles } = await client.query(
+    'SELECT producto_id, cantidad FROM detalles_pedido WHERE pedido_id = $1',
+    [pedidoId]
+  );
+
+  const productoIds = detalles.map((d) => d.producto_id);
+  const { rows: stocks } = await client.query(
+    'SELECT id, stock_actual FROM productos WHERE id = ANY($1::int[]) FOR UPDATE',
+    [productoIds]
+  );
+  const stocksActuales = new Map(stocks.map((p) => [p.id, Number(p.stock_actual)]));
+
+  const resultado = calcularDescuentoStock(stocksActuales, detalles);
+  if (!resultado.ok) {
+    const err = new Error(resultado.error);
+    err.status = 409;
+    throw err;
+  }
+
+  for (const [productoId, nuevoStock] of resultado.nuevosStocks) {
+    await client.query('UPDATE productos SET stock_actual = $1 WHERE id = $2', [nuevoStock, productoId]);
   }
 };
 
