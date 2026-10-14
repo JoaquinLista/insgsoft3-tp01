@@ -268,6 +268,24 @@ const descontarStockDelPedido = async (client, pedidoId) => {
 };
 
 /**
+ * Clasifica hace cuánto espera un pedido para priorizar la cola de despacho.
+ * Función pura: recibe `ahora` por parámetro para no depender del reloj del sistema.
+ */
+export function prioridadDespacho(pedido, ahora = new Date()) {
+  if (!pedido || !pedido.fecha_creacion) {
+    return 'sin-fecha';
+  }
+  const dias = (ahora - new Date(pedido.fecha_creacion)) / 86400000;
+  if (dias < 1) {
+    return 'reciente';
+  }
+  if (dias < 7) {
+    return 'esta-semana';
+  }
+  return 'atrasado';
+}
+
+/**
  * Helper interno: recupera pedidos completos por un conjunto de ids.
  * @param {number[]} ids
  */
