@@ -5,7 +5,7 @@ import { query } from '../config/db.js';
  */
 export const listarProductos = async () => {
   const { rows } = await query(
-    `SELECT id, nombre, unidad_medida
+    `SELECT id, nombre, unidad_medida, stock_actual
        FROM productos
       ORDER BY nombre ASC`
   );

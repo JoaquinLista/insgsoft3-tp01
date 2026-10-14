@@ -16,8 +16,9 @@ CREATE TABLE IF NOT EXISTS sucursales (
 
 CREATE TABLE IF NOT EXISTS productos (
     id             SERIAL PRIMARY KEY,
-    nombre         VARCHAR(120) NOT NULL UNIQUE,
-    unidad_medida  VARCHAR(30)  NOT NULL
+    nombre         VARCHAR(120)  NOT NULL UNIQUE,
+    unidad_medida  VARCHAR(30)   NOT NULL,
+    stock_actual   NUMERIC(12,2) NOT NULL DEFAULT 0 CHECK (stock_actual >= 0)
 );
 
 CREATE TABLE IF NOT EXISTS insumos (
@@ -33,7 +34,7 @@ CREATE TABLE IF NOT EXISTS pedidos (
     sucursal_origen_id   INTEGER NOT NULL REFERENCES sucursales(id),
     sucursal_destino_id  INTEGER NOT NULL REFERENCES sucursales(id),
     estado               VARCHAR(20) NOT NULL DEFAULT 'PENDIENTE'
-                         CHECK (estado IN ('PENDIENTE', 'EN_PREPARACION', 'DESPACHADO', 'ENTREGADO')),
+                         CHECK (estado IN ('PENDIENTE', 'EN_PREPARACION', 'DESPACHADO', 'ENTREGADO', 'CANCELADO')),
     fecha_creacion       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -65,7 +66,7 @@ INSERT INTO insumos (nombre, stock_actual, stock_minimo, unidad_medida) VALUES
     ('Levadura',      12.00,  15.00, 'kg')
 ON CONFLICT (nombre) DO NOTHING;
 
-INSERT INTO productos (nombre, unidad_medida) VALUES
-    ('Medialunas',   'docena'),
-    ('Pan Baguette', 'unidad')
+INSERT INTO productos (nombre, unidad_medida, stock_actual) VALUES
+    ('Medialunas',   'docena', 40.00),
+    ('Pan Baguette', 'unidad', 60.00)
 ON CONFLICT (nombre) DO NOTHING;
