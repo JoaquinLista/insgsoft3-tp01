@@ -9,7 +9,16 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 
-# ---- Etapa 2: runtime ----
+# ---- Etapa 2: tests (dependencias completas, con vitest incluido) ----
+FROM node:22-alpine AS test
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci
+COPY src ./src
+COPY vitest.config.js ./
+ENTRYPOINT ["npm", "run", "test:ci"]
+
+# ---- Etapa 3: runtime ----
 FROM node:22-alpine AS runtime
 LABEL org.opencontainers.image.source="https://github.com/JoaquinLista/insgsoft3-tp01"
 ENV NODE_ENV=production

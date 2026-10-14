@@ -5,6 +5,9 @@ node_modules/
 dist/
 build/
 
+# Reportes de coverage (TP5)
+coverage/
+
 # Secretos (NUNCA se commitean; el .env.example sí)
 .env
 *.local
