@@ -703,3 +703,144 @@ Dos Pull Requests, a propósito:
 > podía mergear; mostrar el PR #36 en vivo; y decir qué de un cambio **ninguno** de los tres
 > guardianes de `main` (PR + build + cobertura) puede detectar, y qué de eso sí podría
 > revisarte hoy un agente de IA.
+
+---
+
+## TP6 — CD: despliegue continuo (QA y producción)
+
+**Workflow:** [`.github/workflows/ci.yml`](.github/workflows/ci.yml) (extendido sobre el del TP4/TP5) ·
+**Proxy parametrizado:** [`frontend/default.conf.template`](frontend/default.conf.template) ·
+**Infra:** Render (back + front, QA y prod) + Neon (Postgres gestionado, una base por entorno) ·
+**Corridas:** pestaña *Actions* del repo
+
+### 0. Qué se montó
+
+Sobre el pipeline de CI del TP4/TP5 se agregaron dos jobs de **CD** que despliegan la app de
+verdad, encadenados con `needs` para que cada etapa dependa de que la anterior haya demostrado
+que la app funciona — nunca se despliega sobre un commit que no pasó por el que viene antes:
+
+| Pieza | Cómo quedó |
+|---|---|
+| Publicación de imágenes | `push: true` solo si el evento es `push` a `main` (nunca en PR), a `ghcr.io/joaquinlista/insgsoft3-tp01-{backend,frontend}:sha-<sha>` — la imagen que se publica es la que ya pasó build + tests + coverage en el mismo job |
+| `deploy-qa` | `needs: [build-backend, build-frontend]`; dispara los *deploy hooks* de Render del commit ya verificado (`&ref=$GITHUB_SHA`, no la punta de la rama) y espera con un smoke test (`/api/health`, `/api/sucursales`, front `/`) hasta 10 minutos |
+| `deploy-prod` | `needs: deploy-qa`; corre en el GitHub Environment `production`, que tiene un **reviewer obligatorio** configurado — el job queda **pausado** hasta que alguien lo aprueba a mano, recién ahí dispara los hooks de prod y corre su propio smoke test |
+| Imagen única, config por entorno | el mismo Dockerfile de frontend sirve QA y prod: `default.conf.template` usa `${BACKEND_URL}` y `${DNS_RESOLVER}`, que la imagen oficial de `nginx` sustituye con `envsubst` al arrancar (`/etc/nginx/templates/*.template`); los valores por defecto del `ENV` del Dockerfile (`http://backend:3000`, `127.0.0.11`, el DNS embebido de Docker) son los del `docker-compose` local, y cada servicio de Render los pisa con sus propias variables |
+| Bases de datos | una base **Neon** (Postgres gestionado, con SSL obligatorio) por entorno — `panaderias-qa` y `panaderias-prod` — nunca QA contra la base de prod |
+
+### 1. Por qué ese orden y por qué prod no es automático
+
+- **`deploy-qa` antes que `deploy-prod`**, nunca en paralelo: si prod desplegara al mismo
+  tiempo que QA, el gate de aprobación manual estaría aprobando un commit que **todavía no se
+  probó vivo en ningún lado** — solo pasaron tests unitarios contra mocks (TP5). QA es la
+  última verificación barata antes de arriesgar producción.
+- **Prod pide una persona, QA no.** El `environment: production` del job tiene un *required
+  reviewer*; QA no. La razón es de costo del error: si el deploy a QA sale mal, no lo nota
+  nadie más que el pipeline; si sale mal en prod, lo nota quien esté usando la app. El gate
+  está en el lugar donde el error es caro, no en todos lados.
+- El smoke test de cada etapa no es un detalle cosmético: es la condición real de que
+  `deploy-prod` empiece. Pega contra `/api/health` (que hace `SELECT 1` contra la base, no
+  solo "el proceso está vivo") y contra una ruta de negocio (`/api/sucursales`) antes de dar
+  por buena la etapa.
+
+### 2. Los tres problemas reales que aparecieron al verificar en vivo (no en el enunciado)
+
+Tener el pipeline en verde en GitHub Actions **no alcanzaba**: tres cosas distintas estaban
+rotas del lado de la infraestructura real y solo se vieron probando la app desplegada, no
+leyendo el workflow.
+
+| # | Qué pasaba | Causa | Cómo se encontró | Cómo se resolvió |
+|---|---|---|---|---|
+| 1 | `panaderias-api-prod` nunca había servido una sola request | Su *único* deploy (el de creación del servicio) había fallado por `connection is insecure (try using sslmode=require)` — la variable `POSTGRES_SSL` no estaba en `true` en ese momento. Se corrigió la variable después, pero **nadie volvió a desplegar** sobre el servicio ya roto | Logs del deploy en el dashboard de Render | Deploy manual sobre la config ya corregida — levantó en 22s |
+| 2 | `panaderias-api-qa` "no existía" | El servicio sí existía, pero Render lo había agrupado dentro de un *Project* (llamado, confusamente, con un entorno interno "Production" — nada que ver con nuestro QA/prod) y no aparecía en el listado principal de servicios | Búsqueda manual dentro de los *Projects* del dashboard | — |
+| 3 | El deploy de #2 disparado por el hook del pipeline se colgó 18 minutos y terminó en *timeout* | El contenedor **sí** bindeó el puerto (`[server] API escuchando en :3000`) pero Render le mandó `SIGTERM` 3 segundos después y quedó escaneando puertos sin encontrar ninguno — un comportamiento de la plataforma, no de la app ni de la config (que ya estaba bien) | Logs del deploy: `Señal SIGTERM recibida` seguido de `Port scan timeout reached` | Deploy manual — esta vez levantó limpio en 24s |
+
+Los tres se diagnosticaron y resolvieron navegando el dashboard de Render y Neon con Claude en
+Chrome (detalle en **Uso de IA** más abajo), no adivinando — cada uno tiene su log citado
+arriba como evidencia.
+
+### 3. El bug real: `$host` vs `$proxy_host` (508 Loop Detected)
+
+Con los tres servicios ya arriba, la app seguía rota: cualquier pantalla que llamara a
+`/api/*` mostraba *"Error 508 al consultar /sucursales"*. `508` no es un error de la app — es
+un código HTTP real, **Loop Detected**, que devuelve el *edge* de Render cuando detecta que una
+conexión está dando vueltas en círculo.
+
+La causa estaba en `default.conf.template`:
+
+```nginx
+proxy_set_header Host $host;
+```
+
+`$host` es el header `Host` del pedido **original** — el del navegador al frontend
+(`panaderias-front-qa.onrender.com`). Render enruta internamente por ese header: todos sus
+servicios conviven detrás del mismo *edge*, y decide a qué contenedor mandar una conexión
+mirando a qué dominio dice ir. Al reenviar el `Host` del frontend hacia el backend, la
+conexión **volvía al propio frontend** (que volvía a proxyear, que volvía a mandarla al
+frontend...) hasta que el edge cortaba el loop con un 508.
+
+El fix es una sola variable: `proxy_set_header Host $proxy_host;` — `$proxy_host` es el host
+que nginx ya resolvió de `$backend_api` (la variable con `${BACKEND_URL}`), es decir el del
+**backend real**, no el del pedido entrante. Con Docker Compose nunca se nota este bug porque
+ahí no hay un edge compartido enrutando por `Host`; aparece recién contra la infraestructura
+real de Render — es un ejemplo concreto de por qué el TP exige probar contra el deploy
+desplegado y no alcanza con que el `docker compose up` local funcione.
+
+### 4. Demostración del gate de aprobación a producción
+
+- Se abrió [PR #40](https://github.com/JoaquinLista/insgsoft3-tp01/pull/40) con el fix del
+  punto anterior. `build-backend` y `build-frontend` en verde, se mergeó (squash, commit
+  `31f639a`).
+- El push a `main` disparó la corrida completa
+  ([run 39334355252](https://github.com/JoaquinLista/insgsoft3-tp01/actions/runs/39334355252)):
+  `build-backend` ✓ → `build-frontend` ✓ → `deploy-qa` ✓ (6s, smoke test en verde) → y ahí
+  **`deploy-prod` quedó pausado** esperando aprobación — confirmado con
+  `gh api .../actions/runs/.../pending_deployments`, que lo lista como *pending* con
+  `current_user_can_approve: true`.
+  - El revisor humano lo aprobó explícitamente (vía API, revisando primero que QA ya estaba
+    verde). Recién ahí `deploy-prod` arrancó y terminó en 34s con su smoke test en verde.
+- Verificación final **en el navegador**, no solo en el log del pipeline: tanto
+  `panaderias-front-qa.onrender.com` como `panaderias-front-prod.onrender.com` cargan el
+  tablero de pedidos con datos reales de sus respectivas bases (`Depósito Central`,
+  `Panadería Viedma`, …) y sin el 508 — la prueba de que el fix resolvió el problema no es que
+  el pipeline diera verde, es que la app sirve datos de punta a punta.
+
+### 5. Problemas encontrados y cómo se resolvieron
+
+| Problema | Causa | Solución |
+|---|---|---|
+| `panaderias-api-prod` con 0 deploys exitosos desde su creación | Primer deploy falló por SSL faltante contra Neon; se corrigió la variable pero no se volvió a desplegar | Deploy manual sobre la config ya corregida |
+| `panaderias-api-qa` parecía no existir | Render lo agrupó dentro de un *Project* al crearlo; el listado principal de "Ungrouped Services" no lo mostraba | Buscarlo dentro de *Projects* → `My project` en el dashboard |
+| El deploy de `panaderias-api-qa` vía hook tardó 18 min y falló | La app bindeó el puerto pero Render la mató con `SIGTERM` y después no detectó ningún puerto abierto — un hiccup de la plataforma (free tier) | Deploy manual: la segunda vez levantó limpio en segundos |
+| `/api/*` devolvía 508 en todos los entornos desplegados | `proxy_set_header Host $host` reenviaba el host del frontend; el edge de Render enruta por ese header y la conexión volvía en loop al propio frontend | `proxy_set_header Host $proxy_host` — el host del backend real, no el del pedido entrante |
+
+### 6. Uso de IA
+
+- **Qué se hizo con IA:** con **Claude Code** (incluida navegación real del dashboard de
+  Render y de Neon con la extensión de Chrome) se diagnosticaron los tres problemas de
+  infraestructura del punto 2 leyendo logs de deploy en vivo, se encontró y explicó el bug del
+  punto 3 confirmándolo primero con una request real (`GET /api/pedidos` → `508`) antes de
+  tocar el código, se armó el PR #40, y se operó el gate de aprobación de prod por API
+  (`gh api .../pending_deployments`) después de confirmar que QA ya estaba verde.
+- **Qué autorizó el alumno a mano:** cada acción con costo o alcance real se confirmó antes de
+  ejecutarse — crear el servicio nuevo en Render (explícitamente en el plan **Free**, no el
+  plan pago que el formulario preselecciona), mergear el PR #40 a `main`, y aprobar el deploy a
+  producción.
+- **Qué decidió el alumno (y tiene que poder defender):** la separación de bases por entorno
+  (Neon `panaderias-qa` / `panaderias-prod`), que `deploy-prod` dependa de `deploy-qa` en vez
+  de disparar en paralelo, y por qué el gate de aprobación va en prod y no en QA.
+- **Cómo se verificó:** cada uno de los tres problemas de infraestructura tiene su log citado
+  como evidencia (no se infirió nada); el bug del 508 se confirmó con una request real antes y
+  después del fix (`read_network_requests` mostrando `statusCode: 508` primero, y la UI
+  cargando datos reales después); el gate se comprobó pidiendo el estado de
+  `pending_deployments` por API, no solo mirando el color en la web; y la verificación final
+  fue cargar ambas apps desplegadas en el navegador y ver datos reales, no solo "pipeline en
+  verde".
+
+> **Pendiente del alumno antes de la defensa:** poder explicar, sin leer, la cadena completa
+> `needs: build → deploy-qa → deploy-prod` y por qué ese orden; qué es un *deploy hook* de
+> Render y por qué el workflow le pasa `&ref=$GITHUB_SHA` en vez de dejarlo desplegar la punta
+> de la rama; qué es un *GitHub Environment* y cómo el reviewer obligatorio lo convierte en un
+> gate; cómo una sola imagen Docker sirve distintos entornos (`envsubst` + variables de Render
+> vs. los defaults del `ENV` del Dockerfile); y, el más importante, poder explicar el bug del
+> 508 en una pizarra — qué hace `$host` vs `$proxy_host`, por qué Render enruta por `Host`, y
+> por qué ese bug nunca aparece en `docker compose up` local.
