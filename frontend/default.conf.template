@@ -24,7 +24,10 @@ server {
         proxy_pass $backend_api;
         proxy_ssl_server_name on;   # si el backend es https (Render), el TLS necesita saber a qué host va
         proxy_http_version 1.1;
-        proxy_set_header Host              $host;
+        # $host (el Host del pedido original, acá el dominio del FRENTE) rompe en Render:
+        # su edge enruta por Host header, y manda la conexión de vuelta al frente -> loop
+        # (508 Loop Detected). $proxy_host es el host que sale de $backend_api, el del backend real.
+        proxy_set_header Host              $proxy_host;
         proxy_set_header X-Real-IP         $remote_addr;
         proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
