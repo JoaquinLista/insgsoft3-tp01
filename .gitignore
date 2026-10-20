@@ -8,6 +8,10 @@ build/
 # Reportes de coverage (TP5)
 coverage/
 
+# Reportes de Playwright (TP7): se generan en cada corrida, no se commitean
+playwright-report/
+test-results/
+
 # Secretos (NUNCA se commitean; el .env.example sí)
 .env
 *.local
