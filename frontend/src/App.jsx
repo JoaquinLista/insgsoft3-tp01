@@ -119,7 +119,7 @@ function TableroPedidos({ sucursales, productos }) {
         <h2>Nuevo pedido</h2>
         <p className="subtitle">Registrá un movimiento de productos entre sucursales.</p>
 
-        {error && <div className="alert alert-error">{error}</div>}
+        {error && <div className="alert alert-error" role="alert">{error}</div>}
         {okMsg && <div className="alert alert-ok">{okMsg}</div>}
 
         <form onSubmit={enviar}>
@@ -365,7 +365,7 @@ function GestionInsumos() {
           Si el nombre ya existe se actualiza su stock; si no, se crea uno nuevo.
         </p>
 
-        {error && <div className="alert alert-error">{error}</div>}
+        {error && <div className="alert alert-error" role="alert">{error}</div>}
         {okMsg && <div className="alert alert-ok">{okMsg}</div>}
 
         <form onSubmit={enviar}>
