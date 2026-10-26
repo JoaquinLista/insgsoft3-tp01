@@ -1019,3 +1019,91 @@ TP necesitó reintento por flakiness real, solo el primer `curl` manual fuera de
 > integración/e2e con ejemplos propios de este TP (no genéricos); y sobre todo el bug de la
 > demo — por qué falló en la limpieza y no en la aserción de contenido, y qué dice eso sobre
 > qué tan fácil es que un bug de UI pase desapercibido si solo se mira la API.
+
+---
+
+## TP8 — IaC: `preprod` con Terraform
+
+**Código:** [`infra/`](infra/) — `main.tf` (providers), `neon.tf`, `render.tf`, `variables.tf`,
+`outputs.tf`, `scripts/apply-schema.js` · **No corre en CI**: es a mano, en la terminal, a
+propósito — la defensa de este TP es en vivo (`apply` y `destroy` delante del profesor), así
+que automatizarlo en un pipeline le saca el sentido al ejercicio.
+
+### 0. Herramienta y providers
+
+Terraform 1.16.6 (`winget install Hashicorp.Terraform`). Dos providers, porque el stack ya
+usa dos nubes distintas desde el TP6:
+
+- [`render-oss/render` v1.9.1](https://registry.terraform.io/providers/render-oss/render/latest) — el provider oficial de Render, publicado por ellos mismos (hay otro de la comunidad, `jackall3n/terraform-provider-render`, más viejo).
+- [`kislerdm/neon` v0.18.0](https://registry.terraform.io/providers/kislerdm/neon/latest) — no es de Neon, es comunitario, pero es el único con soporte real para `neon_project`.
+
+Las credenciales (`RENDER_API_KEY`, `RENDER_OWNER_ID`, `NEON_API_KEY`) **nunca entran al
+código**: los dos `provider { }` quedan vacíos a propósito, los providers las leen solas de
+variables de entorno. No hay `terraform.tfvars` con secretos — ni siquiera existe el archivo,
+no hace falta. `.gitignore` cubre `infra/.terraform/`, `*.tfstate*` y `*.tfvars` igual, para
+el día que alguien los use.
+
+### 1. Qué crea `preprod` y por qué no toca QA/prod
+
+- **`neon_project.preprod`**: un proyecto de Neon **nuevo y separado** de los de QA/prod — no
+  un branch del mismo proyecto. Es la forma más simple de garantizar aislamiento total sin
+  depender de conocer o referenciar IDs de recursos que Terraform no gestiona.
+- **`render_web_service.api_preprod` / `front_preprod`**: corren la **misma imagen del TP7**
+  (`ghcr.io/.../insgsoft3-tp01-{backend,frontend}:sha-<commit>`, el tag es una variable con
+  default). `BACKEND_URL` del front sale de `render_web_service.api_preprod.url` — el atributo
+  que Render devuelve después de crear el servicio, no una URL tipeada a mano.
+- El proyecto nace con la base vacía: un `null_resource` con `local-exec` corre
+  `scripts/apply-schema.js` (usa el driver `pg` que ya está instalado en `backend/node_modules`,
+  no Docker) para cargar `database/init.sql` (schema + seed del TP2) una sola vez por `apply`.
+
+### 2. El ciclo destroy → apply, probado en vivo
+
+```
+terraform apply    # crea los 4 recursos — preprod responde con el seed
+terraform destroy  # Destroy complete! Resources: 4 destroyed.
+terraform apply    # Apply complete! Resources: 4 added. Mismas URLs, ids nuevos.
+terraform destroy  # se dejó todo abajo — se recrea en la defensa, no hace falta tenerlo arriba
+```
+
+Las URLs quedan idénticas entre la primera y la segunda vuelta
+(`panaderias-api-preprod.onrender.com`, `panaderias-front-preprod.onrender.com`) porque
+dependen del `name` del servicio, no de su id — lo único que cambia entre recreaciones son los
+ids internos (`srv-...`, el id del proyecto Neon) y la contraseña del rol de base, que Neon
+regenera cada vez.
+
+### 3. Problemas encontrados (todos reales, ninguno estaba en el enunciado)
+
+| # | Problema | Causa | Solución |
+|---|---|---|---|
+| 1 | Neon rechazaba crear el proyecto: `org_id is required` | La API de Neon ya exige `org_id`, pero el schema del provider todavía lo marca `optional` — desactualizado respecto a la API real | Agregar `org_id` como variable, sacado de Organization settings en el dashboard de Neon |
+| 2 | `requested history retention seconds exceeds allowed maximum` | El default del provider para `history_retention_seconds` es 24h (86400s); el plan free de Neon tope en 6h (21600s) | Fijarlo a mano en `neon_project.preprod` |
+| 3 | El bootstrap del schema fallaba con Docker: `failed to connect to the docker API` | Docker Desktop no estaba corriendo en la máquina, y además ni hacía falta — es una dependencia de más para algo que Node ya puede hacer | Reemplazar el `docker run` por `scripts/apply-schema.js`, reusando el `pg` que ya está en `backend/node_modules` |
+| 4 | La contraseña de la base nueva quedó en texto plano en el error de la terminal, cuando el paso de Docker falló | La connection string iba interpolada directo en el `command` del `local-exec`; si el comando falla, Terraform reimprime el comando completo pese a que el valor esté marcado `sensitive` en el plan | Pasarla por `environment` del provisioner en vez de por el `command` — no vuelve a aparecer en un error. De hecho quedó sin importancia: el `destroy` posterior invalidó esa contraseña junto con todo el proyecto |
+| 5 | `invalid ownerID` al crear los servicios de Render | El valor que se probó primero para `RENDER_OWNER_ID` era el id de un servicio existente (`srv-...`/`db7...`), no el de la cuenta | `curl -H "Authorization: Bearer $RENDER_API_KEY" https://api.render.com/v1/owners` devuelve el id correcto (`usr-...`) |
+| 6 | `Cannot find module "C:\...\infra\"C:\...\apply-schema.js""` | El `command` del `local-exec` tenía la ruta entre comillas (`\"...\"`) aunque no tenía espacios — en Windows esas comillas de más quedaron pegadas al argumento en vez de delimitarlo | Sacar las comillas: la ruta no las necesita |
+
+### 4. Uso de IA
+
+- **Qué se hizo con IA:** con Claude Code se armó todo `infra/` (providers, recursos,
+  variables) consultando el schema real de los dos providers (`terraform providers schema
+  -json`, corrido localmente sin ninguna credencial) en vez de adivinar nombres de atributos; y
+  se diagnosticó cada uno de los 6 problemas de la tabla de arriba leyendo el error real de
+  Terraform, no probando a ciegas.
+- **Qué ejecutó el alumno a mano:** las credenciales (Render API key + owner ID, Neon API key
+  + org ID) nunca las vio ni las usó la IA — se consiguieron y exportaron en la propia terminal
+  del alumno, y los 4 `apply`/`destroy` del punto 2 los corrió él mismo. Es a propósito: este
+  TP se defiende corriendo los comandos en vivo.
+- **Qué tiene que poder defender:** por qué `preprod` es un proyecto Neon nuevo y no un branch
+  del existente; qué hace cada uno de los 6 problemas de la tabla (sobre todo el de `org_id` y
+  el de `history_retention_seconds`, porque son límites reales de la cuenta, no errores de
+  sintaxis); y por qué las credenciales nunca tocan el código ni el repo.
+- **Cómo se verificó:** cada problema de la tabla tiene su mensaje de error real citado; el
+  ciclo completo se corrió dos veces seguidas (apply → destroy → apply) y se comprobó con
+  `curl` que `preprod` respondía con el seed cargado (`/api/sucursales` devolviendo las 5
+  sucursales) antes del segundo `destroy`.
+
+> **Pendiente del alumno antes de la defensa:** tener las 4 credenciales (o saber conseguirlas
+> de nuevo en 2 minutos) y poder correr `terraform apply`/`destroy` en vivo sin este documento
+> al lado; explicar de memoria por qué `preprod` no es un branch del proyecto de QA/prod; y
+> poder señalar en el código exactamente de dónde sale cada variable de entorno que reciben los
+> dos `render_web_service` (ninguna está escrita a mano).
