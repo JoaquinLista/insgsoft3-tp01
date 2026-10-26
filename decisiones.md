@@ -844,3 +844,178 @@ desplegado y no alcanza con que el `docker compose up` local funcione.
 > vs. los defaults del `ENV` del Dockerfile); y, el más importante, poder explicar el bug del
 > 508 en una pizarra — qué hace `$host` vs `$proxy_host`, por qué Render enruta por `Host`, y
 > por qué ese bug nunca aparece en `docker compose up` local.
+
+---
+
+## TP7 — Contenedores + e2e: build-once-deploy-many, gate real y el bug del deploy
+
+**Workflow:** [`.github/workflows/ci.yml`](.github/workflows/ci.yml), jobs `integracion` y `e2e` ·
+**Tests:** [`frontend/e2e/api.spec.js`](frontend/e2e/api.spec.js) (integración) ·
+[`frontend/e2e/pedidos.spec.js`](frontend/e2e/pedidos.spec.js) (e2e, Playwright) ·
+**Enlaces del TP7** más abajo.
+
+### 0. Qué se agregó sobre el TP6
+
+El TP6 ya desplegaba a QA y prod, pero con dos huecos que este TP cierra: nadie probaba la app
+desplegada de verdad (solo el smoke test), y los 4 servicios de Render resultaron estar
+reconstruyendo el Dockerfile en cada deploy en vez de correr la imagen publicada.
+
+- **`integracion`** (`needs: deploy-qa`): 3 tests de Playwright que hablan directo con la API de
+  QA (alta + cancelación con verificación en la base, alta inválida rechazada, transición de
+  estado inválida rechazada por la máquina de estados del TP5). Sin browser, sin mocks.
+- **`e2e`** (`needs: integracion`): 3 flujos de Playwright con browser real contra el front de
+  QA — crear un pedido y verlo en la lista, el error de validación cuando origen = destino, y
+  cargar un insumo nuevo. Si `integracion` ya mostró que la API está rota, ni se gasta un
+  browser en confirmarlo (por eso `e2e` depende de `integracion`, no de `deploy-qa`
+  directamente).
+- **`deploy-prod`** pasó a depender de `e2e`, no de `deploy-qa`: la aprobación manual ahora
+  pide algo más fuerte que "la API respondió al smoke test" — pide que un browser real haya
+  completado los flujos de negocio.
+
+### 1. El bug de deploy que encontramos haciendo esto en serio (no estaba en el enunciado, lo encontramos verificando)
+
+Los 4 servicios de Render (`panaderias-{api,front}-{qa,prod}`) estaban dados de alta como
+**Web Service de Git**: Render clonaba `JoaquinLista/insgsoft3-tp01` y buildeaba el Dockerfile
+él mismo en cada deploy. El hook de CI le mandaba `&ref=$GITHUB_SHA`, que es justo el
+parámetro que usa ese tipo de servicio para decirle qué commit clonar — nunca tocaba la imagen
+que `build-backend`/`build-frontend` ya habían publicado en `ghcr.io`. El pipeline daba verde,
+las imágenes estaban públicas, pero **lo que corría en QA/prod era otra cosa**: una
+reconstrucción propia de Render, no el artefacto verificado.
+
+Se corrigió en dos partes (PR #45):
+
+1. Los 4 servicios se pasaron de "Git repository" a **"Existing image"** desde Settings → Build
+   → Source → Edit (Render permite este cambio sin recrear el servicio, conserva URL y env
+   vars). Imagen configurada: `ghcr.io/joaquinlista/insgsoft3-tp01-{backend,frontend}` sin tag
+   fijo en el servicio — el tag lo decide el hook en cada deploy.
+2. El hook pasó de `&ref=$GITHUB_SHA` a `&imgURL=ghcr.io%2Fjoaquinlista%2Finsgsoft3-tp01-{backend,frontend}%3Asha-$GITHUB_SHA`.
+   Render exige que todo en `imgURL` excepto el tag coincida con la imagen configurada en el
+   servicio, o rechaza el deploy — así que no es un parámetro cosmético, obliga a que el hook
+   despliegue exactamente el commit que el pipeline acaba de construir y verificar, nunca otro.
+
+### 2. Build-once-deploy-many y por qué nunca se publica `latest`
+
+`build-backend`/`build-frontend` publican la imagen **una sola vez por commit**, con el tag
+`sha-<commit>`, nunca `latest`. De ahí en más nadie vuelve a buildear: QA corre esa imagen,
+y si pasa `integracion` + `e2e`, prod corre la **misma** imagen — nunca una reconstruida contra
+el mismo código. Es justamente lo que se rompió en el punto 1 (Render buildeaba su propia
+copia) y lo que el fix restaura.
+
+No publicar `latest` es a propósito: un tag mutable rompe la trazabilidad commit → imagen (dos
+deploys de "latest" en momentos distintos pueden ser dos imágenes distintas sin que se note) y
+además, sin ese tag, cualquier intento de desplegar sin especificar `sha-<commit>` falla con
+"no public image found" en vez de desplegar silenciosamente algo viejo — lo confirmamos en la
+práctica: al configurar el campo de imagen en Render sin el tag, tiró exactamente ese error.
+
+**Cómo se verifica que corre la imagen y no una reconstrucción:** en cada servicio, Settings
+muestra "Image URL" con la ruta de `ghcr.io` (no un repo de GitHub + Dockerfile), y la pestaña
+Events del último deploy dice *"Deploy triggered via deploy hook"* apuntando a esa imagen —
+no hay paso de build en el log del deploy.
+
+### 3. Integración vs e2e, y por qué esos flujos
+
+`api.spec.js` prueba el **contrato de la API contra su base real**: que el estado persiste,
+que se rechaza lo inválido, que la máquina de estados del TP5 (`PENDIENTE → ENTREGADO` sin
+pasar por `DESPACHADO`) frena en la base y no en una validación de capa superior que un mock
+dejaría pasar. `pedidos.spec.js` prueba **lo que ve una persona**: un formulario real, un click
+real, una tabla real — cosas que la API nunca expone por sí sola, como el orden en que se
+muestran los pedidos o si el mensaje de error tiene el rol de accesibilidad correcto. Las dos
+suites pueden estar en desacuerdo: la API puede estar perfecta y la pantalla mostrar cualquier
+cosa (es justo lo que pasó en la demo del punto 4).
+
+Tercera prueba de cada suite "a elección": en integración, la transición de estado inválida
+(porque vive en la base, un doble nunca la detectaría rota). En e2e, cargar un insumo — el
+flujo diario del otro costado de la app, y el que más escribe sobre la base real (upsert, no
+un alta descartable).
+
+### 4. Demostración del gate: un bug real en producción de datos, no en el test
+
+Para demostrar que el gate frena de verdad, se rompió la **aplicación**, no el test: en
+[`pedidosService.js`](backend/src/services/pedidosService.js), `listarPedidos` pasó de
+`ORDER BY fecha_creacion DESC` a `ASC` (rama `demo/tp7-orden-pedidos-roto`, PR #43, commit
+`134215f`).
+
+- Corrida roja:
+  [run 40378170755](https://github.com/JoaquinLista/insgsoft3-tp01/actions/runs/40378170755) —
+  `deploy-qa` ✅, `integracion` ✅ (3/3, el orden no le importa a la API), `e2e` ❌,
+  `deploy-prod` saltado. Reportes: `playwright-report-integracion` y `playwright-report-e2e`
+  (adjuntos a esa corrida).
+- El fallo **no** fue donde se esperaba. Como `sucursales[0]`/`productos[0]` son siempre los
+  mismos, cualquier corrida de este test crea un pedido con el mismo origen/destino/producto
+  que todas las anteriores — así que el `toContainText` de la primera fila pasó igual, de
+  casualidad: con `ASC` la "primera fila" pasó a ser el pedido más viejo de la tabla (ya
+  `CANCELADO` de una corrida pasada), que por esa coincidencia de datos fijos se veía igual al
+  que el test acababa de crear. Donde explotó de verdad fue en la limpieza: el test intenta
+  cancelar ese pedido viejo otra vez, y la máquina de estados del TP5 lo rechaza con `409`
+  (cancelar algo ya `CANCELADO` no es una transición válida) en vez del `200` esperado. El bug
+  es peor de lo que parece a primera vista: no solo desordena la vista, hace que la limpieza
+  (y cualquier acción siguiente) le pegue al pedido equivocado sin que nada en pantalla lo
+  delate. Dejó 2 pedidos (`#6`, `#7`) en `PENDIENTE` en la base de QA — los que el test creó de
+  verdad y nunca llegó a cancelar — limpiados a mano por API después.
+- Fix: revertir la línea (PR #44, commit `747b37c`) + el fix del punto 1 (PR #45, commit
+  `d1aa49f`).
+- Corrida completa en verde, con las 4 imágenes ya corriendo desde el registry:
+  [run 40400731443](https://github.com/JoaquinLista/insgsoft3-tp01/actions/runs/40400731443) —
+  `build-backend` → `build-frontend` → `deploy-qa` → `integracion` → `e2e` → `deploy-prod`,
+  los 6 en verde.
+
+### 5. Cold starts y flakiness contra QA real
+
+Render (plan free) duerme los servicios sin tráfico — la primera request después de un rato
+tarda varios segundos más que las siguientes. El smoke test de `deploy-qa`/`deploy-prod` ya
+reintentaba hasta 30 veces cada 20s por esto (TP6); se confirmó en vivo durante este TP: un
+`curl` suelto a `/api/health` con 10s de timeout dio timeout, el mismo `curl` con 30s respondió
+bien. Los tests de Playwright usan su propio timeout por acción (no uno global corto), así que
+un cold start durante la corrida demora el test, no lo rompe — ninguna de las corridas de este
+TP necesitó reintento por flakiness real, solo el primer `curl` manual fuera del pipeline.
+
+### 6. Problemas encontrados
+
+| Problema | Causa | Solución |
+|---|---|---|
+| Los 4 servicios de Render reconstruían el Dockerfile en cada deploy en vez de correr la imagen publicada | Estaban dados de alta como "Git repository", no "Existing image"; el hook mandaba `ref` (para git) en vez de `imgURL` (para imagen) | Settings → Build → Source → Edit en los 4 servicios, + el hook del workflow pasa a `imgURL` (PR #45) |
+| Al configurar la imagen en Render sin tag, "No public image found" | Sin tag, Render busca `latest` — y nunca se publica ese tag a propósito | Poner la imagen con el tag incluido: `ghcr.io/.../insgsoft3-tp01-backend:sha-<commit>` |
+| El bug de orden de la demo no rompió donde se esperaba (línea de contenido), rompió en la limpieza | Los fixtures de sucursales/productos son siempre los mismos: el pedido viejo que quedó "arriba" por el `ASC` coincide en origen/destino/producto con el que el test acababa de crear | Ninguna — es el comportamiento real del bug, quedó documentado así; se limpiaron a mano los 2 pedidos que quedaron `PENDIENTE` en QA |
+
+### 7. Uso de IA
+
+- **Qué se hizo con IA:** con Claude Code se armó la suite de integración/e2e y el
+  encadenamiento de jobs del PR #42; se diagnosticó por qué el bug de la demo (PR #43) fallaba
+  en un lugar distinto al esperado leyendo el reporte de Playwright; y se encontró el problema
+  del punto 1 (servicios de Render en modo git, no imagen) revisando la configuración real de
+  cada servicio, no asumiendo que el TP6 ya lo dejaba bien.
+- **Qué autorizó/ejecutó el alumno a mano:** los 4 cambios de Settings en Render (son de su
+  cuenta), mergear los PRs #43/#44/#45, y aprobar el deploy a producción en cada corrida.
+- **Qué tiene que poder defender:** por qué `e2e` depende de `integracion` y no de `deploy-qa`
+  directamente; la diferencia entre `ref` e `imgURL` en un deploy hook de Render y por qué una
+  no sirve para lo que sirve la otra; por qué nunca se publica `latest`; y, el más importante,
+  poder explicar en una pizarra por qué el bug de la demo no falló en la aserción de contenido
+  sino en la limpieza (la coincidencia de fixtures fijos).
+- **Cómo se verificó:** cada corrida citada arriba tiene su link; el bug de Render se confirmó
+  mirando Settings de cada servicio (decía "Git repository", no una imagen) antes de tocar
+  nada, y después del fix mirando que Events dijera "Deploy triggered via deploy hook" sobre
+  una imagen y no sobre un build.
+
+### Enlaces del TP7
+
+- Paquetes públicos: [`insgsoft3-tp01-backend`](https://github.com/JoaquinLista/insgsoft3-tp01/pkgs/container/insgsoft3-tp01-backend) ·
+  [`insgsoft3-tp01-frontend`](https://github.com/JoaquinLista/insgsoft3-tp01/pkgs/container/insgsoft3-tp01-frontend) —
+  tag en producción: `sha-d1aa49f06d5ff97522a78ac853677cb0b26f8b7b`.
+- Corrida con integración verde / e2e roja:
+  [run 40378170755](https://github.com/JoaquinLista/insgsoft3-tp01/actions/runs/40378170755)
+  (commit `134215f`, PR #43) — artefactos `playwright-report-integracion` y
+  `playwright-report-e2e` adjuntos a esa corrida.
+- Corrida completa en verde hasta prod, ya con las 4 imágenes corriendo desde el registry:
+  [run 40400731443](https://github.com/JoaquinLista/insgsoft3-tp01/actions/runs/40400731443)
+  (commit `d1aa49f`, PR #45).
+- URLs vivas: QA [front](https://panaderias-front-qa.onrender.com) /
+  [api](https://panaderias-api-qa.onrender.com/api/health) · PROD
+  [front](https://panaderias-front-prod.onrender.com) /
+  [api](https://panaderias-api-prod.onrender.com/api/health).
+
+> **Pendiente del alumno antes de la defensa:** poder explicar sin leer la diferencia entre
+> `ref` e `imgURL` en un deploy hook de Render y por qué una sirve para git y la otra para
+> imagen; por qué `e2e` depende de `integracion` y no de `deploy-qa`; la distinción
+> integración/e2e con ejemplos propios de este TP (no genéricos); y sobre todo el bug de la
+> demo — por qué falló en la limpieza y no en la aserción de contenido, y qué dice eso sobre
+> qué tan fácil es que un bug de UI pase desapercibido si solo se mira la API.
