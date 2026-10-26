@@ -68,7 +68,7 @@ export const listarPedidos = async () => {
        FROM pedidos p
        JOIN sucursales so ON so.id = p.sucursal_origen_id
        JOIN sucursales sd ON sd.id = p.sucursal_destino_id
-      ORDER BY p.fecha_creacion DESC, p.id DESC`
+      ORDER BY p.fecha_creacion ASC, p.id ASC`
   );
 
   if (pedidos.length === 0) return [];
