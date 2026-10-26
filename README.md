@@ -13,6 +13,7 @@ Cada TP agrega una capa sobre la misma aplicación.
 | TP4 | CI: pipeline de build en cada PR, cache de capas, gate obligatorio | `v4.0.0` |
 | TP5 | Testing y calidad: suite de unit tests, coverage con umbral, gate por cobertura | `v5.0.0` |
 | TP6 | CD: despliegue continuo a QA y producción (Render + Neon), gate de aprobación manual | `v6.0.0` |
+| TP7 | Contenedores + e2e: QA/prod corren la imagen del registry (sha-commit), gate de integración + e2e contra QA antes de deploy-prod | `v7.0.0` |
 
 Decisiones y evidencias, acumuladas TP a TP: [`decisiones.md`](decisiones.md) · [`evidencias.md`](evidencias.md).
 Definición funcional (visión, personas, épicas, historias de usuario): [`producto/`](producto/).
