@@ -3,6 +3,8 @@
 // (desarrollo local, tests, docker-compose) el SDK queda deshabilitado solo.
 import * as Sentry from '@sentry/node';
 
+console.log('[sentry] dsn crudo:', JSON.stringify(process.env.SENTRY_DSN), '| longitud:', (process.env.SENTRY_DSN || '').length);
+
 Sentry.init({
   dsn: process.env.SENTRY_DSN,
   environment: process.env.SENTRY_ENVIRONMENT || process.env.NODE_ENV || 'development',
