@@ -52,6 +52,10 @@ app.use((err, req, res, next) => {
   const status = err.status ?? 500;
   if (status >= 500) {
     console.error('[error]', err);
+    // setupExpressErrorHandler depende de instrumentacion automatica que en
+    // ESM necesita arrancar node con --import; sin eso no es confiable, asi
+    // que ademas se reporta a mano, que es lo que sabemos que funciona.
+    Sentry.captureException(err);
   }
   res.status(status).json({
     error: err.message ?? 'Error interno del servidor',
