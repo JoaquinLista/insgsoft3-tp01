@@ -21,7 +21,7 @@ FROM build AS test
 ENTRYPOINT ["npm", "run", "test:ci"]
 
 # ---- Etapa 3: servidor de producción ----
-FROM nginx:1.27-alpine AS runtime
+FROM nginx:1.31-alpine AS runtime
 LABEL org.opencontainers.image.source="https://github.com/JoaquinLista/insgsoft3-tp01"
 RUN rm /etc/nginx/conf.d/default.conf
 # La imagen oficial de nginx procesa /etc/nginx/templates/*.template con envsubst
