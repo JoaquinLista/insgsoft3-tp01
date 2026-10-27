@@ -15,6 +15,7 @@ Cada TP agrega una capa sobre la misma aplicación.
 | TP6 | CD: despliegue continuo a QA y producción (Render + Neon), gate de aprobación manual | `v6.0.0` |
 | TP7 | Contenedores + e2e: QA/prod corren la imagen del registry (sha-commit), gate de integración + e2e contra QA antes de deploy-prod | `v7.0.0` |
 | TP8 | IaC: `infra/` con Terraform (Render + Neon) crea/destruye el entorno `preprod` sin tocar QA/prod | `v8.0.0` |
+| TP9 | DevSecOps: Dependabot, Sentry en back y front, CodeQL + push protection | `v9.0.0` |
 
 Decisiones y evidencias, acumuladas TP a TP: [`decisiones.md`](decisiones.md) · [`evidencias.md`](evidencias.md).
 Definición funcional (visión, personas, épicas, historias de usuario): [`producto/`](producto/).

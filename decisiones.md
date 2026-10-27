@@ -1107,3 +1107,119 @@ regenera cada vez.
 > al lado; explicar de memoria por qué `preprod` no es un branch del proyecto de QA/prod; y
 > poder señalar en el código exactamente de dónde sale cada variable de entorno que reciben los
 > dos `render_web_service` (ninguna está escrita a mano).
+
+---
+
+## TP9 — DevSecOps: Dependabot, Sentry, y el bug real que encontró
+
+### 0. Qué se montó
+
+- **Dependabot** ([`.github/dependabot.yml`](.github/dependabot.yml)): un bloque por ecosistema
+  — `npm` en `backend/` y `frontend/`, `docker` en `backend/`, `frontend/` y `database/`,
+  `github-actions` en la raíz — chequeo semanal.
+- **Sentry** en los dos lados: `@sentry/node` en el backend (PR #50, #66, #67, #68 — la saga
+  completa está en el punto 2), `@sentry/react` en el frontend. `SENTRY_DSN` del backend es
+  variable de entorno de Render (runtime); `VITE_SENTRY_DSN` del frontend se hornea en el
+  bundle en build-time, por eso es secret de GitHub Actions + build-arg del Dockerfile, no
+  variable de Render — son mecanismos distintos a propósito, no un descuido.
+- **Push protection**: ya estaba activa (viene gratis en repos públicos desde antes de este
+  TP, confirmado por API: `secret_scanning_push_protection: enabled`).
+- **CodeQL**: activado por API (`code-scanning/default-setup`, `state: configured`) —
+  detectó solo `javascript-typescript` y `actions` como lenguajes del repo. Primera corrida en
+  verde.
+
+### 1. El PR de Dependabot que se mergeó
+
+[PR #55](https://github.com/JoaquinLista/insgsoft3-tp01/pull/55) — `pg` 8.23.0 → 8.23.1 (patch).
+De los ~15 PRs que Dependabot abrió solo en los primeros minutos (configurarlo dispara un
+chequeo inmediato, no hace falta esperar a la próxima semana), la mayoría eran saltos de
+versión mayor a propósito rotos para la demo del gate (React 18→19, Express 4→5, Vite 5→8,
+`actions/checkout` 6→7) — varios de esos quedaron en rojo en su propio check de PR, el gate
+haciendo exactamente lo que tiene que hacer. Se mergeó el de `pg` porque es un patch sin
+cambios de API, con el pipeline completo en verde, y porque tocar el driver de Postgres sin
+romper nada es la clase de cambio que Dependabot está pensado para automatizar sin supervisión.
+Los demás quedaron abiertos, sin mergear, a propósito.
+
+### 2. La saga de por qué Sentry no mandaba nada desde Render (la parte larga)
+
+Esto fue lo que más tiempo consumió del TP9, y vale la pena documentarlo entero porque cada
+paso descartó una hipótesis distinta:
+
+1. **Primer intento**: DSN pegado en Render, sin reiniciar el servicio. Nada llegaba a Sentry.
+   Causa: igual que en el TP6, cambiar una env var en un servicio de Render **no reinicia el
+   proceso solo** — Node solo lee `process.env` una vez, al arrancar. Se confirmó mirando los
+   logs: el proceso llevaba corriendo desde antes del cambio.
+2. Después de un **"Restart service"** manual, seguía sin llegar nada — y encima el proyecto de
+   Sentry que se había armado al principio ni siquiera aparecía en el dashboard (quedó a medio
+   crear en el asistente). Se creó de nuevo, con un DSN nuevo.
+3. Con el DSN correcto y el servicio reiniciado, **seguía sin aparecer el evento**. Una prueba
+   aislada local (mismo DSN, un `Sentry.captureException` suelto desde una terminal) **sí**
+   llegó — eso acotó el problema a algo específico de correr dentro de Express en Render, no al
+   DSN ni al SDK en sí.
+4. Se agregó `Sentry.captureException(err)` a mano en el error handler final (por las dudas de
+   que `setupExpressErrorHandler` no alcanzara sin el flag `--import` que pide Sentry para ESM).
+   Tampoco apareció nada — pero con `debug: true` los logs de Render mostraron la causa real:
+   **`Sentry Logger [error]: Transport disabled`**, precedido de **`Invalid Sentry Dsn`**. El
+   SDK generaba un `eventId` válido pero nunca llegaba a mandarlo, porque consideraba el DSN
+   inválido — pese a que el mismo string, probado suelto en local, era válido.
+5. Retipear el DSN a mano en el campo de Render (por si había quedado un carácter invisible de
+   un copy-paste) **tampoco alcanzó** con un simple "Restart service" — recién funcionó cuando
+   el valor nuevo pasó por un **deploy completo** disparado por el pipeline (no un restart
+   manual). La hipótesis más probable: el "Restart" reutiliza algún env cacheado del lado de
+   Render que un deploy nuevo no.
+6. Con eso, `Sentry Logger` dejó de quejarse del DSN y empezó a loguear spans de tracing reales
+   — ahí sí, el próximo error disparado llegó a Sentry como [`PANADERIAS-BACKEND-2`](https://joaquins.sentry.io/issues/?project=4512325600673792),
+   con endpoint y método marcados (gracias a la instrumentación automática, que al final sí
+   funcionaba).
+
+**Nota para la defensa**: quedó logging de diagnóstico (`debug: true`, un `console.log` del DSN
+crudo) en `instrument.js` que en un mundo con más tiempo se saca — se documenta acá en vez de
+sacarlo a las apuradas sin volver a probar todo el camino.
+
+### 3. El error real y la tarjeta del tablero
+
+El error que terminó llegando no fue fabricado: es un bug real. `PATCH /api/pedidos/:id` hace
+`Number(req.params.id)` sin validar — con un id no numérico da `NaN`, que Postgres rechaza con
+`invalid input syntax for type integer`, y el usuario ve un 500 en vez de un 400 claro.
+Encontrado en Sentry, se cargó como [issue #69](https://github.com/JoaquinLista/insgsoft3-tp01/issues/69)
+y se agregó al tablero del TP3 ([proyecto](https://github.com/users/JoaquinLista/projects/1)) —
+nace de un dato real de observabilidad, no de una idea a priori.
+
+### 4. Monitor externo (DOWN/UP)
+
+**Pendiente** — no se llegó a configurar un monitor externo (UptimeRobot u otro) ni a forzar una
+caída real cronometrada por el tiempo que consumió la saga de Sentry del punto 2. Queda
+documentado como lo que falta, no como algo que se ocultó.
+
+### 5. Problemas encontrados
+
+| Problema | Causa | Solución |
+|---|---|---|
+| Cambiar `SENTRY_DSN` en Render no mandaba nada a Sentry | Env var nueva sin reiniciar el proceso — mismo problema que ya se había visto en el TP6 | `Manual Deploy` → `Restart service` (o, como se vio después, un deploy completo) |
+| El proyecto de Sentry del backend no aparecía en el dashboard | Quedó a medio crear en el asistente de onboarding | Crearlo de nuevo, completo |
+| `Invalid Sentry Dsn` / `Transport disabled` con un DSN que local funcionaba bien | No determinado con certeza — un simple "Restart" con el valor corregido no alcanzó, hizo falta un deploy completo del pipeline | Pasar el fix por un push a `main` en vez de solo reiniciar |
+| Dependabot abrió ~15 PRs, varios rotos | Esperado: abre un PR por cada versión disponible, no filtra por si rompe algo | Mergear solo el patch seguro (`pg`), dejar el resto sin mergear |
+
+### 6. Uso de IA
+
+- **Qué se hizo con IA**: con Claude Code se armó `dependabot.yml`, la integración de Sentry en
+  los dos lados, y se diagnosticó la saga completa del punto 2 leyendo logs reales de Render en
+  cada paso (nunca asumiendo que un fix funcionaba sin confirmarlo en el log) — incluyendo correr
+  una prueba aislada local para descartar el DSN/SDK antes de sospechar de Render.
+- **Qué ejecutó el alumno a mano**: las cuentas de Sentry (creación de los 2 proyectos, los
+  DSNs), cargar las variables en Render, cada merge de PR y cada aprobación de deploy a
+  producción.
+- **Qué tiene que poder defender**: la diferencia entre `SENTRY_DSN` (runtime, Render) y
+  `VITE_SENTRY_DSN` (build-time, GitHub Actions) y por qué no es la misma variable ni el mismo
+  mecanismo; por qué cambiar una env var en Render no alcanza sin reiniciar; y el bug real de
+  `cambiarEstado` sin validar el id — por qué un 500 ahí es peor que un 400, y cómo se vería el
+  fix.
+- **Cómo se verificó**: cada paso de la saga del punto 2 se verificó mirando el log de Render
+  en vivo, no asumiendo que un cambio había funcionado; el error final se confirmó viéndolo
+  aparecer en el dashboard de Sentry con su propio ID (`PANADERIAS-BACKEND-2`), no solo
+  infiriendo que "debería" haber llegado.
+
+> **Pendiente del alumno antes de la defensa:** armar el monitor externo y la demo de
+> DOWN/UP que quedó pendiente (punto 4); poder explicar la saga del DSN sin leerla — en
+> particular por qué un "Restart" no alcanzó y un deploy sí; y la diferencia entre las dos
+> variables de Sentry (runtime vs. build-time).
