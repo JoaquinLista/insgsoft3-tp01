@@ -55,7 +55,9 @@ app.use((err, req, res, next) => {
     // setupExpressErrorHandler depende de instrumentacion automatica que en
     // ESM necesita arrancar node con --import; sin eso no es confiable, asi
     // que ademas se reporta a mano, que es lo que sabemos que funciona.
-    Sentry.captureException(err);
+    const eventId = Sentry.captureException(err);
+    console.log('[sentry] eventId:', eventId, '| client activo:', !!Sentry.getClient(), '| dsn seteado:', !!process.env.SENTRY_DSN);
+    Sentry.flush(3000).then((ok) => console.log('[sentry] flush ok:', ok));
   }
   res.status(status).json({
     error: err.message ?? 'Error interno del servidor',
