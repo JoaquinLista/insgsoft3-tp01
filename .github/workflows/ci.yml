@@ -146,6 +146,8 @@ jobs:
           context: ./frontend
           push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
           tags: ghcr.io/joaquinlista/insgsoft3-tp01-frontend:sha-${{ github.sha }}
+          build-args: |
+            VITE_SENTRY_DSN=${{ secrets.VITE_SENTRY_DSN }}
           cache-from: type=gha,scope=frontend
           cache-to: type=gha,mode=max,scope=frontend
 

@@ -8,6 +8,12 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY . .
+# Vite reemplaza import.meta.env.VITE_* en el bundle en tiempo de BUILD, no de
+# arranque (a diferencia de BACKEND_URL/DNS_RESOLVER, que son runtime via
+# envsubst) — por eso el DSN de Sentry entra como build-arg, no como ENV de
+# la imagen final. No es un secreto real: Sentry publica el DSN a propósito
+# en el bundle del cliente para que pueda mandar sus propios eventos.
+ARG VITE_SENTRY_DSN
 RUN npm run build
 
 # ---- Etapa 2: tests (parte del build: ya tiene Node y las dependencias) ----

@@ -1,6 +1,9 @@
+import './instrument.js';
+
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import * as Sentry from '@sentry/node';
 
 import pool from './config/db.js';
 import sucursalesRoutes from './routes/sucursalesRoutes.js';
@@ -38,6 +41,10 @@ app.use('/api/productos', productosRoutes);
 app.use((req, res) => {
   res.status(404).json({ error: `Ruta no encontrada: ${req.method} ${req.originalUrl}` });
 });
+
+// Reporta a Sentry antes del manejador propio — tiene que ir despues de las
+// rutas y antes de cualquier otro error handler, sino no ve el error.
+Sentry.setupExpressErrorHandler(app);
 
 // ---- Manejo global de errores ----
 // eslint-disable-next-line no-unused-vars
