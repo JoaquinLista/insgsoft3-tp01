@@ -5,6 +5,6 @@
 #  Empaquetarlo en la imagen -en vez de montarlo- permite que
 #  docker-compose.registry.yml levante el sistema sin el repo.
 # =============================================================
-FROM postgres:15-alpine
+FROM postgres:18-alpine
 LABEL org.opencontainers.image.source="https://github.com/JoaquinLista/insgsoft3-tp01"
 COPY init.sql /docker-entrypoint-initdb.d/10-init.sql
